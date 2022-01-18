@@ -34,8 +34,8 @@ class PunchoutGUI:
             qubitid : str
                 qubit identifier (todo: get this from punchout)
         """
-        self.fig1=plt.figure(figsize=(10, 10))
-        self.sub=self.fig1.subplots(2, 2)
+        self.fig1 = plt.figure(figsize=(10, 10))
+        self.sub = self.fig1.subplots(2, 2)
         self.fig1.suptitle(qubitid)
         punchout.plotamp(self.sub[0, 0])
         punchout.plotang(self.sub[0, 1])
@@ -51,7 +51,7 @@ class PunchoutGUI:
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
         print('Click again to change, otherwise close')
 
-def run_punchout(qubitid, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples):
+def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples):
     """
     Runs punchout sweep on selected qubit, plots results in clickable GUI. 
     TODO: this should also update configs.
@@ -70,20 +70,25 @@ def run_punchout(qubitid, fbw, n_freq, atten_start, atten_stop, atten_step, n_sa
             ??
     """
 
-    punchout=c_punchout(qubitid='vna', calirepo='submodules/qchip')
-    fcenter=punchout.opts['qchip'].getfreq(qubitid+'.readfreq')
-    fstart=fcenter-fbw/2
-    fstop=fcenter+fbw/2
-    fx=np.linspace(fstart, fstop, 200)
+    punchout = c_punchout(qubitid='vna', calirepo='submodules/qchip')
+
+    fx = np.empty((0, n_freq))
+    for qubitid in qubitids:
+        fcenter = punchout.opts['qchip'].getfreq(qubitid+'.readfreq')
+        fstart = fcenter - fbw/2
+        fstop = fcenter + fbw/2
+        fx = np.vstack((fx, np.linspace(fstart, fstop, n_freq)))
     
     punchout.run(n_samples, fx=fx, attens=np.arange(atten_start, atten_stop, atten_step), maxvatatten=0)
     
-    fig2=plt.figure()
-    sub2=fig2.subplots()
+    #TODO: figure out plotting with multiple qubits
+    
+    fig2 = plt.figure()
+    sub2 = fig2.subplots()
     punchout.plotmaxangdiff(sub2)
     fig2.suptitle(qubitid)
-    fig3=plt.figure()
-    ax3=fig3.subplots(2, 2)
+    fig3 = plt.figure()
+    ax3 = fig3.subplots(2, 2)
     ax3[0, 0].plot(punchout.s11.real.T, punchout.s11.imag.T)
     ax3[1, 0].plot(abs(punchout.s11.T))
     ax3[1, 1].plot(np.angle(punchout.s11.T))
@@ -94,7 +99,7 @@ def run_punchout(qubitid, fbw, n_freq, atten_start, atten_stop, atten_step, n_sa
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run punchout freq x atten sweep')
-    parser.add_argument('qubitid', help='qubit identifier; e.g. Q0, Q1, etc.')
+    parser.add_argument('qubitids', nargs='+', help='list of qubit identifiers; e.g. Q0, Q1, etc.')
     args = parser.parse_args()
 
-    run_punchout(args.qubitid, FBW, N_FREQ, ATTEN_START, ATTEN_STOP, ATTEN_STEP, N_SAMPLES)
+    run_punchout(args.qubitids, FBW, N_FREQ, ATTEN_START, ATTEN_STOP, ATTEN_STEP, N_SAMPLES)
