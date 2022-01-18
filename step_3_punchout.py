@@ -13,7 +13,7 @@ import sys
 import argparse
 from qubic.qcvv.punchout import c_punchout
 
-FBW = 6e6
+FBW = 6e6 #make all these optional CL args
 N_FREQ = 200
 ATTEN_START = -35
 ATTEN_STOP = 0.2
@@ -79,6 +79,7 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
         fstop = fcenter + fbw/2
         fx = np.vstack((fx, np.linspace(fstart, fstop, n_freq)))
     
+    fx = np.squeeze(fx) #remove first axis if there's only one qubit
     punchout.run(n_samples, fx=fx, attens=np.arange(atten_start, atten_stop, atten_step), maxvatatten=0)
     
     #TODO: figure out plotting with multiple qubits
@@ -100,6 +101,17 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run punchout freq x atten sweep')
     parser.add_argument('qubitids', nargs='+', help='list of qubit identifiers; e.g. Q0, Q1, etc.')
+    parser.add_argument('--bandwidth', default=FBW, 
+            help='frequency sweep bandwidth in Hz, default {}'.format(FBW))
+    parser.add_argument('--n-freq', default=N_FREQ, help='frequency sweep bandwidth in Hz, default {}'.format(N_FREQ))
+    parser.add_argument('--atten-start', default=ATTEN_START, 
+            help='starting (high) attenuation, default{}. Note that atten values are negative, so lower value means lower power'.format(ATTEN_START))
+    parser.add_argument('--atten-stop', default=ATTEN_STOP, 
+            help='ending (low) attenuation, default{}'.format(ATTEN_STOP))
+    parser.add_argument('--atten-step', default=ATTEN_STEP, 
+            help='dB increment to use in atten sweep, default{}'.format(ATTEN_STEP))
+    parser.add_argument('--n-samples', default=N_SAMPLES, 
+            help='number of samples in readout acquisition buffer, default{}'.format(N_SAMPLES))
     args = parser.parse_args()
 
-    run_punchout(args.qubitids, FBW, N_FREQ, ATTEN_START, ATTEN_STOP, ATTEN_STEP, N_SAMPLES)
+    run_punchout(args.qubitids, args.bandwidth, args.n_freq, args.atten_start, args.atten_stop, args.atten_step, args.n_samples)
