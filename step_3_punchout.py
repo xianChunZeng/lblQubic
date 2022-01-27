@@ -25,7 +25,7 @@ class PunchoutGUI:
     Implements clickable GUI for selecting resonator power/freq
     """
 
-    def __init__(self, punchout, qubitid):
+    def __init__(self, punchout, sweep_index=None, qubitid=''):
         """
         Parameters
         ----------
@@ -35,12 +35,10 @@ class PunchoutGUI:
                 qubit identifier (todo: get this from punchout)
         """
         self.fig1 = plt.figure(figsize=(10, 10))
-        self.sub = self.fig1.subplots(2, 2)
+        self.sub = self.fig1.subplots(2, 1)
         self.fig1.suptitle(qubitid)
-        punchout.plotamp(self.sub[0, 0])
-        punchout.plotang(self.sub[0, 1])
-        punchout.plotampdiff(self.sub[1, 0])
-        punchout.plotangdiff(self.sub[1, 1])
+        punchout.plotamp(self.sub[0], sweep_index)
+        punchout.plotang(self.sub[1], sweep_index)
         self.fig1.canvas.mpl_connect('button_press_event', self.onClick)
         print('Click any plot to select desired resonator attenuation and frequency')
         plt.show()
@@ -79,24 +77,16 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
         fstop = fcenter + fbw/2
         fx = np.vstack((fx, np.linspace(fstart, fstop, n_freq)))
     
-    fx = np.squeeze(fx) #remove first axis if there's only one qubit
+    #fx = np.squeeze(fx) #remove first axis if there's only one qubit
     punchout.run(n_samples, fx=fx, attens=np.arange(atten_start, atten_stop, atten_step), maxvatatten=0)
-    
-    #TODO: figure out plotting with multiple qubits
-    
-    fig2 = plt.figure()
-    sub2 = fig2.subplots()
-    punchout.plotmaxangdiff(sub2)
-    fig2.suptitle(qubitid)
-    fig3 = plt.figure()
-    ax3 = fig3.subplots(2, 2)
-    ax3[0, 0].plot(punchout.s11.real.T, punchout.s11.imag.T)
-    ax3[1, 0].plot(abs(punchout.s11.T))
-    ax3[1, 1].plot(np.angle(punchout.s11.T))
+     
+    freq = []
+    atten = []
+    for i in range(len(qubitids)):
+        cal_gui = PunchoutGUI(punchout, i, qubitids[i])
+        freq.append(cal_gui.freq)
+        atten.append(cal_gui.atten)
 
-    cal_gui = PunchoutGUI(punchout, qubitid)
-    freq = cal_gui.freq
-    atten = cal_gui.atten
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run punchout freq x atten sweep')

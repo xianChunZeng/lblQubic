@@ -12,17 +12,19 @@ fx=numpy.linspace(lor-bw/2,lor+bw/2,2000)
 vna.seqs(fx,t0=692e-9,amp=0.5)
 vna.run(100)
 
-#vna.peaks(0.2)
+peakdict = vna.s11peaks()
 	
 fig1=pyplot.figure(figsize=(15,8))
 sub1=fig1.subplots(3,2).reshape(6)
 vna.iqapplot(sub1)
-#fig2=pyplot.figure(figsize=(15,8))
-#pyplot.plot(vna.fx[0:len(vna.p)],vna.p)
-#pyplot.plot(vna.fx[vna.p2],vna.p[vna.p2],'x')
-#	fig3=pyplot.figure(figsize=(8,8))
-#	ax3=fig3.subplots()
-#	vna.iqplot(ax3,hexbin=False,marker='.')
+fig2=pyplot.figure(figsize=(15,8))
+pyplot.plot(vna.fx[0:len(vna.p)],vna.p)
+pyplot.plot(vna.fx[vna.p2],vna.p[vna.p2],'x')
+
+fig3=pyplot.figure(figsize=(8,8))
+ax3=fig3.subplots()
+vna.iqplot(ax3,hexbin=False,marker='.')
+
 #pyplot.savefig('fig1.pdf')
 pyplot.show()
 
