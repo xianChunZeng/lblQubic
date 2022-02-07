@@ -69,6 +69,7 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
     """
 
     punchout = c_punchout(qubitid='vna', calirepo='submodules/qchip')
+    qubitids = np.asarray(qubitids)
 
     fx = np.empty((0, n_freq))
     for qubitid in qubitids:
@@ -77,6 +78,10 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
         fstop = fcenter + fbw/2
         fx = np.vstack((fx, np.linspace(fstart, fstop, n_freq)))
     
+    if fx.shape[0] > 1:
+        inds = np.argsort(fx[:,0])
+        fx = fx[inds]
+        qubitids = qubitids[inds]
     #fx = np.squeeze(fx) #remove first axis if there's only one qubit
     punchout.run(n_samples, fx=fx, attens=np.arange(atten_start, atten_stop, atten_step), maxvatatten=0)
      
