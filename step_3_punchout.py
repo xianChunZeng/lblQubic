@@ -13,7 +13,7 @@ import sys
 import argparse
 from qubic.qcvv.punchout import c_punchout
 
-FBW = 6e6 #make all these optional CL args
+FBW = 6e6 
 N_FREQ = 200
 ATTEN_START = -35
 ATTEN_STOP = 0.2
@@ -49,7 +49,7 @@ class PunchoutGUI:
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
         print('Click again to change, otherwise close')
 
-def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples):
+def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples, calirepo='submodules/qchip'):
     """
     Runs punchout sweep on selected qubit, plots results in clickable GUI. 
     TODO: this should also update configs.
@@ -68,7 +68,7 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
             ??
     """
 
-    punchout = c_punchout(qubitid='vna', calirepo='submodules/qchip')
+    punchout = c_punchout(qubitid='vna', calirepo=calirepo)
     qubitids = np.asarray(qubitids)
 
     fx = np.empty((0, n_freq))

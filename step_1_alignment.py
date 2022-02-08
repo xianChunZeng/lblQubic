@@ -15,7 +15,7 @@ TLO = 692e-9
 MON_SEL0 = 0
 MON_SEL1 = 3
 
-def run_alignment(tlo, mon_sel0, mon_sel1, nbuf, fig=None):
+def run_alignment(tlo, mon_sel0, mon_sel1, nbuf, calirepo='submodules/qchip', fig=None):
     """
     Parameters
     ----------
@@ -28,7 +28,7 @@ def run_alignment(tlo, mon_sel0, mon_sel1, nbuf, fig=None):
         fig : matplotlib Figure
             (optional) figure for generating a plot
     """
-    alignment=c_alignment(qubitid='alignment',calirepo='submodules/qchip',debug=False,sim=True)
+    alignment=c_alignment(qubitid='alignment', calirepo=calirepo, debug=False, sim=True)
     alignment.seqs(tlo=tlo,mon_sel0=0,mon_sel1=3)
     alignment.run(nbuf)
     if fig is not None:
