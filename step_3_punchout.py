@@ -18,7 +18,7 @@ N_FREQ = 200
 ATTEN_START = -35
 ATTEN_STOP = 0.2
 ATTEN_STEP = 5.0
-N_SAMPLES = 103
+N_SAMPLES = 100
 
 class PunchoutGUI:
     """
@@ -91,6 +91,8 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
         cal_gui = PunchoutGUI(punchout, i, qubitids[i])
         freq.append(cal_gui.freq)
         atten.append(cal_gui.atten)
+
+    return freq, atten
 
 
 if __name__=='__main__':
