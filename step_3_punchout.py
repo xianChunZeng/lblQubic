@@ -12,6 +12,7 @@ import numpy as np
 import sys
 import argparse
 from qubic.qcvv.punchout import c_punchout
+from qubic.qubic.envset import load_chip
 
 FBW = 6e6 
 N_FREQ = 200
@@ -49,7 +50,7 @@ class PunchoutGUI:
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
         print('Click again to change, otherwise close')
 
-def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples, calirepo='submodules/qchip'):
+def run_punchout(qubit_dict, inst_cfg, fbw, n_freq, atten_start, atten_stop, atten_step, n_samples):
     """
     Runs punchout sweep on selected qubit, plots results in clickable GUI. 
     TODO: this should also update configs.
@@ -68,7 +69,7 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
             ??
     """
 
-    punchout = c_punchout(qubitid='vna', calirepo=calirepo)
+    punchout = c_punchout(qubitid='vna', qchip=None, instrument_cfg=inst_cfg)
     qubitids = np.asarray(qubitids)
 
     fx = np.empty((0, n_freq))
@@ -94,10 +95,19 @@ def run_punchout(qubitids, fbw, n_freq, atten_start, atten_stop, atten_step, n_s
 
     return freq, atten
 
+def get_qubit_dict(qubitids, qchip):
+    qubits = qchip.paradict['Qubits']
+    qubitdict = {}
+    for k, v in qubits.items():
+        if k in qubitids:
+            qubitdict[k] = v['readfreq']
+
+    return qubitdict
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run punchout freq x atten sweep')
     parser.add_argument('qubitids', nargs='+', help='list of qubit identifiers; e.g. Q0, Q1, etc.')
+    parser.add_argument('--qchip', help='name of chip (corresponds to qchip directory; e.g. X4Y2)')
     parser.add_argument('--bandwidth', default=FBW, 
             help='frequency sweep bandwidth in Hz, default {}'.format(FBW))
     parser.add_argument('--n-freq', default=N_FREQ, help='frequency sweep bandwidth in Hz, default {}'.format(N_FREQ))
@@ -109,6 +119,12 @@ if __name__=='__main__':
             help='dB increment to use in atten sweep, default{}'.format(ATTEN_STEP))
     parser.add_argument('--n-samples', default=N_SAMPLES, 
             help='number of samples in readout acquisition buffer, default{}'.format(N_SAMPLES))
+    parser.add_argument('--cfg-file', default=None,
+            help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
+    parser.add_argument('--calirepo-dir', default='./submodules/qchip', 
+            help='path to gitrepo containing chip calibrations, default {}'.format('submodules/qchip'))
     args = parser.parse_args()
+
+    qchip, inst_cfg = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
 
     run_punchout(args.qubitids, args.bandwidth, args.n_freq, args.atten_start, args.atten_stop, args.atten_step, args.n_samples)

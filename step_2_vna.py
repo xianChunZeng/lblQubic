@@ -115,7 +115,7 @@ def find_peaks_phasediff(phases, sig_thresh=2):
 
     
 
-def run_vna(bw, n_freq_points, n_samples, amplitude, t_lo=TLO, calirepo='submodules/qchip'):
+def run_vna(bw, n_freq_points, n_samples, amplitude, qchip=None, t_lo=TLO, calirepo='submodules/qchip'):
     vna=c_vna(qubitid='vna',calirepo=calirepo)
     lor=vna.opts['wiremap'].lor #where do these come from? they should either not be class attributes or stay in VNA
     bw=vna.opts['chassis'].fsample
