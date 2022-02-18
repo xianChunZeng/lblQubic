@@ -119,7 +119,7 @@ def run_vna(instrument_cfg, bw=VNA_BANDWIDTH, n_freq_points=N_FREQ_POINTS, n_sam
 
     orig_qubitdict = {}
     for k, v in vna.opts['qchip'].paradict['Qubits'].items():
-        if(k[0] == 'Q')
+        if k[0] == 'Q':
             orig_qubitdict.update(k, v)
 
     gui = VNAClickGUI(vna.fx, vna.phase, orig_qubitdict)

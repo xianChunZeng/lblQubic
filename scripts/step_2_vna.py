@@ -9,7 +9,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-bw', '--bandwidth', default=vna.VNA_BANDWIDTH,\
             help='VNA sweep BW in Hz, default: {}'.format(vna.VNA_BANDWIDTH))
-    parser.add_argument('-a', '--amplitude', default=vna.AMPLITDUE,\
+    parser.add_argument('-a', '--amplitude', default=vna.AMPLITUDE,\
             help='tone amplitude, default: {}'.format(vna.AMPLITUDE))
     parser.add_argument('-n', '--n-freq', default=vna.N_FREQ_POINTS,\
             help='N points in VNA, default: {}'.format(vna.N_FREQ_POINTS))
@@ -17,8 +17,8 @@ if __name__=='__main__':
             help='number of samples in readout buffer, default: {}'.format(vna.N_SAMPLES))
     parser.add_argument('--update-cfg', action='store_true', help='overwrite config file')
     parser.add_argument('--punchout', action='store_true', help='run punchout after VNA on all identified peaks')
-    parser.add_argument('--punchout-bandwidth', default=vna.FBW, 
-            help='frequency sweep bandwidth in Hz, default {}'.format(vna.FBW))
+    parser.add_argument('--punchout-bandwidth', default=po.FBW, 
+            help='frequency sweep bandwidth in Hz, default {}'.format(po.FBW))
     parser.add_argument('--n-freq-punchout', default=po.N_FREQ, 
             help='frequency sweep bandwidth in Hz, default {}'.format(po.N_FREQ))
     parser.add_argument('--atten-start', default=po.ATTEN_START, 
