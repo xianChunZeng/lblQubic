@@ -35,7 +35,7 @@ setuptools.setup(
 		"sklearn": ['scipy>=0.0'],
 		},
 	install_requires=[
-        "qubic",
+        #"qubic",
 		"numpy",
 		"scipy",
 		"sklearn"

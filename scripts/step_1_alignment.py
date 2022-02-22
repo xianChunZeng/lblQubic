@@ -7,7 +7,8 @@ TODO:
 """
 
 import matplotlib.pyplot as plt
-from qubic.qcvv.alignment import c_alignment
+from chipcalibration.alignment import run_alignment
+from qubic.qubic.envset import load_chip
 import argparse
 
 N_BUF = 1000
@@ -15,28 +16,16 @@ TLO = 692e-9
 MON_SEL0 = 0
 MON_SEL1 = 3
 
-def run_alignment(tlo, mon_sel0, mon_sel1, nbuf, calirepo='submodules/qchip', fig=None):
-    """
-    Parameters
-    ----------
-        tlo : float
-            ??
-        mon_sel0 : int
-            ??
-        mon_sel1 : int
-            ??
-        fig : matplotlib Figure
-            (optional) figure for generating a plot
-    """
-    alignment=c_alignment(qubitid='alignment', calirepo=calirepo, debug=False, sim=True)
-    alignment.seqs(tlo=tlo,mon_sel0=0,mon_sel1=3)
-    alignment.run(nbuf)
-    if fig is not None:
-        alignment.plot(fig)
-        plt.show()
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='run ADC/DAC alignment procedure')
-    #parser.add_argument...
+    parser.add_argument('--qchip', help='name of chip (corresponds to qchip directory; e.g. X4Y2)')
+    parser.add_argument('--cfg-file', default=None,
+            help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
+    parser.add_argument('--calirepo-dir', default='../submodules/qchip', 
+            help='path to gitrepo containing chip calibrations, default {}'.format('../submodules/qchip'))
+    args = parser.parse_args()
+
+    qchip, inst_cfg = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
     fig1=plt.figure(1,figsize=(15,8))
-    run_alignment(TLO, MON_SEL0, MON_SEL1, N_BUF, fig1)
+    run_alignment(inst_cfg, TLO, MON_SEL0, MON_SEL1, N_BUF, fig1)
