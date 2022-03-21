@@ -38,4 +38,6 @@ if __name__=='__main__':
 
     qchip, inst_cfg = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
 
-    po.run_punchout(args.qubitids, args.bandwidth, args.n_freq, args.atten_start, args.atten_stop, args.atten_step, args.n_samples)
+    qubit_dict = po.get_qubit_dict(args.qubitids, qchip)
+
+    po.run_punchout(qubit_dict, qchip, inst_cfg, args.bandwidth, args.n_freq, args.atten_start, args.atten_stop, args.atten_step, args.n_samples)

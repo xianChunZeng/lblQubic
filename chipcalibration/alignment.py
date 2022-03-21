@@ -15,7 +15,7 @@ TLO = 692e-9
 MON_SEL0 = 0
 MON_SEL1 = 3
 
-def run_alignment(instrument_cfg, tlo=TLO, mon_sel0=MON_SEL0, mon_sel1=MON_SEL1, nbuf=N_BUF, fig=None):
+def run_alignment(qchip, instrument_cfg, tlo=TLO, mon_sel0=MON_SEL0, mon_sel1=MON_SEL1, nbuf=N_BUF, fig=None):
     """
     Parameters
     ----------
@@ -28,7 +28,7 @@ def run_alignment(instrument_cfg, tlo=TLO, mon_sel0=MON_SEL0, mon_sel1=MON_SEL1,
         fig : matplotlib Figure
             (optional) figure for generating a plot
     """
-    alignment=c_alignment(qubitid='alignment', instrument_cfg=instrument_cfg, qchip=None, debug=False, sim=True)
+    alignment=c_alignment(qubitid='alignment', qchip=qchip, instrument_cfg=instrument_cfg, debug=False, sim=True)
     alignment.seqs(tlo=tlo,mon_sel0=0,mon_sel1=3)
     alignment.run(nbuf)
     if fig is not None:

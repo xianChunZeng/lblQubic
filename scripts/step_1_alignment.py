@@ -28,4 +28,4 @@ if __name__=='__main__':
 
     qchip, inst_cfg = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
     fig1=plt.figure(1,figsize=(15,8))
-    run_alignment(inst_cfg, TLO, MON_SEL0, MON_SEL1, N_BUF, fig1)
+    run_alignment(qchip, inst_cfg, TLO, MON_SEL0, MON_SEL1, N_BUF, fig1)

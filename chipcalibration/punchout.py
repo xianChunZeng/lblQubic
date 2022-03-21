@@ -48,7 +48,7 @@ class PunchoutGUI:
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
         print('Click again to change, otherwise close')
 
-def run_punchout(qubit_dict, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_start=ATTEN_START, \
+def run_punchout(qubit_dict, qchip, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_start=ATTEN_START, \
             atten_stop=ATTEN_STOP, atten_step=ATTEN_STEP, n_samples=N_SAMPLES):
     """
     Runs punchout sweep on selected qubit, plots results in clickable GUI. 
@@ -68,7 +68,7 @@ def run_punchout(qubit_dict, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_start=ATTEN
             ??
     """
 
-    punchout = c_punchout(qubitid='vna', qchip=None, instrument_cfg=inst_cfg)
+    punchout = c_punchout(qubitid='vna', qchip=qchip, instrument_cfg=inst_cfg)
     qubitids = np.asarray(qubitids)
 
     fx = np.empty((0, n_freq))
