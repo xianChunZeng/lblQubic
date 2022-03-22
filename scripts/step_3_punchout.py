@@ -32,7 +32,7 @@ if __name__=='__main__':
             help='number of samples in readout acquisition buffer, default{}'.format(po.N_SAMPLES))
     parser.add_argument('--cfg-file', default=None,
             help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
-    parser.add_argument('--calirepo-dir', default='./submodules/qchip', 
+    parser.add_argument('--calirepo-dir', default='../submodules/qchip', 
             help='path to gitrepo containing chip calibrations, default {}'.format('submodules/qchip'))
     args = parser.parse_args()
 

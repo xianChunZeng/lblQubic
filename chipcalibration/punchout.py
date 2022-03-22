@@ -39,7 +39,7 @@ class PunchoutGUI:
         punchout.plotamp(self.sub[0, 0], sweep_index)
         punchout.plotang(self.sub[0, 1], sweep_index)
         punchout.plotampdiff(self.sub[1, 0], sweep_index)
-        punchout.plotang(self.sub[1, 1], sweep_index)
+        punchout.plotangdiff(self.sub[1, 1], sweep_index)
         self.fig1.canvas.mpl_connect('button_press_event', self.onClick)
         print('Click any plot to select desired resonator attenuation and frequency')
         plt.show()
@@ -71,13 +71,13 @@ def run_punchout(qubit_dict, qchip, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_star
     """
 
     punchout = c_punchout(qubitid='vna', qchip=qchip, instrument_cfg=inst_cfg)
-    qubitids = np.asarray(qubitids)
+    #qubitids = np.asarray(qubitids)
 
     fx = np.empty((0, n_freq))
-    for qubitid in qubitids:
-        fcenter = punchout.opts['qchip'].getfreq(qubitid+'.readfreq')
-        fstart = fcenter - fbw/2
-        fstop = fcenter + fbw/2
+    for _, freq in qubit_dict.items():
+        #fcenter = punchout.opts['qchip'].getfreq(qubitid+'.readfreq')
+        fstart = freq - fbw/2
+        fstop = freq + fbw/2
         fx = np.vstack((fx, np.linspace(fstart, fstop, n_freq)))
     
     if fx.shape[0] > 1:
@@ -89,6 +89,7 @@ def run_punchout(qubit_dict, qchip, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_star
      
     freq = []
     atten = []
+    qubitids = list(qubit_dict.keys())
     for i in range(len(qubitids)):
         cal_gui = PunchoutGUI(punchout, i, qubitids[i])
         freq.append(cal_gui.freq)
