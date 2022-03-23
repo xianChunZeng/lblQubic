@@ -33,6 +33,9 @@ class PunchoutGUI:
             qubitid : str
                 qubit identifier (todo: get this from punchout)
         """
+        self.freq = None
+        self.atten = None
+
         self.fig1 = plt.figure(figsize=(10, 10))
         self.sub = self.fig1.subplots(2, 2)
         self.fig1.suptitle(qubitid)
@@ -96,6 +99,13 @@ def run_punchout(qubit_dict, qchip, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_star
         atten.append(cal_gui.atten)
 
     return freq, atten, qubitids
+
+def update_qchip(qchip, inst_cfg, freqs, attens, qubitids):
+    globalatten = inst_cfg['wiremap'].ttydev['rdrvvat']['default']
+    for i, qubitid in enumerate(qubitids):
+        qchip.updatecfg({('Qubits', qubitid, 'readfreq'): freqs[i]})
+        amp = 10**((attens[i] + globalatten)/20)
+        qchip.updatecfg({('Gates', qubitid + 'read', 0, 'amp'): amp})
 
 def get_qubit_dict(qubitids, qchip):
     """

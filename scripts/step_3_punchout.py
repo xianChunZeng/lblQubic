@@ -19,7 +19,7 @@ import chipcalibration.punchout as po
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Run punchout freq x atten sweep')
     parser.add_argument('qubitids', nargs='+', help='list of qubit identifiers; e.g. Q0, Q1, etc.')
-    parser.add_argument('--qchip', help='name of chip (corresponds to qchip directory; e.g. X4Y2)')
+    parser.add_argument('--qchip', help='name of chip (corresponds to qchip directory; e.g. X4Y2)', required=True)
     parser.add_argument('--save', type=str, nargs='?', const='default', 
             help='OVERWRITE qchip if specified, can optionally provide another file to overwrite instead')
     parser.add_argument('--bandwidth', default=po.FBW, 
@@ -46,12 +46,7 @@ if __name__=='__main__':
     freqs, attens, qubitids = po.run_punchout(qubit_dict, qchip, inst_cfg, args.bandwidth, args.n_freq, args.atten_start, args.atten_stop, args.atten_step, args.n_samples)
 
     if args.save is not None:
-        globalatten = inst_cfg['wiremap'].ttydev['rdrvvat']['default']
-        for i, qubitid in enumerate(qubitids):
-            qchip.updatecfg({('Qubits', qubitid, 'readfreq'): freqs[i]})
-            amp = 10**((attens[i] + globalatten)/20)
-            qchip.updatecfg({('Gates', qubitid + 'read', 'amp'): amp})
-        
+        po.update_qchip(qchip, inst_cfg, freqs, attens, qubitids)
 
         if args.save=='default':
             qchip.save(cfg_file)

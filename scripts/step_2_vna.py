@@ -1,5 +1,7 @@
 import argparse
+import os
 from matplotlib import pyplot as plt
+import numpy as np
 
 from qubic.qubic.envset import load_chip
 from chipcalibration.punchout import run_punchout
@@ -34,13 +36,41 @@ if __name__=='__main__':
             help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
     parser.add_argument('--calirepo-dir', default='../submodules/qchip', 
             help='path to gitrepo containing chip calibrations, default {}'.format('submodules/qchip'))
+    parser.add_argument('--save', type=str, nargs='?', const='default', 
+            help='OVERWRITE qchip if specified, can optionally provide another file to overwrite instead')
     args = parser.parse_args()
 
-    qchip, inst_cfg = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
+    qchip, inst_cfg, cfg_file = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
 
     peak_freqs = vna.run_vna(qchip, inst_cfg, args.bandwidth, args.n_freq, args.n_samples, args.amplitude)
 
     if args.punchout:
-        qubitids = ['peak {}'.format(i) for i in range(len(peak_freqs))]
-        res_freqs, attens = po.run_punchout(qubitids, args.punchout_bandwidth, args.n_freq_punchout,\
+        qubitdict = {'peak {}'.format(i) : peak_freqs[i] for i in range(len(peak_freqs))}
+        res_freqs, attens, _ = po.run_punchout(qubitdict, qchip, inst_cfg, args.punchout_bandwidth, args.n_freq_punchout,\
                 args.atten_start, args.atten_stop, args.atten_step, args.n_samples)
+        res_freqs = np.asarray(res_freqs)
+        attens = np.asarray(attens)
+        good_mask = res_freqs != None
+
+        qubitids = ['Q{}'.format(i) for i in range(np.sum(good_mask))]
+        res_freqs = res_freqs[good_mask]
+        attens = attens[good_mask]
+
+        po.update_qchip(qchip, inst_cfg, res_freqs, attens, qubitids)
+
+    #else if args.save is not None:
+    #    qubitids = ['Q{}'.format(i) for i in range(len(peak_freqs))]
+    else:
+        qubitids = ['Q{}'.format(i) for i in range(len(peak_freqs))]
+        vna.update_qchip(qchip, peak_freqs, qubitids)
+
+    if args.save is not None:
+        if args.save=='default':
+            qchip.save(cfg_file)
+
+        else:
+            if os.path.isabs(args.save):
+                qchip.save(args.save)
+            else:
+                qchip.save(os.path.join(args.calirepo_dir, args.qchip, args.save))
+

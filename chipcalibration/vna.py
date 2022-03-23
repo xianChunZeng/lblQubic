@@ -116,9 +116,12 @@ def run_vna(qchip, instrument_cfg, bw=VNA_BANDWIDTH, n_freq_points=N_FREQ_POINTS
     orig_qubitdict = {}
     for k, v in qchip.paradict['Qubits'].items():
         if k[0] == 'Q':
-            orig_qubitdict.update(k, v)
+            orig_qubitdict.update({k : v['readfreq']})
 
     gui = VNAClickGUI(vna.fx, vna.phase, orig_qubitdict)
     peak_freqs = vna.fx[gui.peak_inds]
     return peak_freqs
 
+def update_qchip(qchip, freqs, qubitids):
+    for i, qubitid in enumerate(qubitids):
+        qchip.updatecfg({('Qubits', qubitid, 'readfreq'): freqs[i]})
