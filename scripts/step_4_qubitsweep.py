@@ -22,8 +22,8 @@ if __name__=='__main__':
     parser.add_argument('--qchip', help='name of chip (corresponds to qchip directory; e.g. X4Y2)', required=True)
     parser.add_argument('--save', type=str, nargs='?', const='default', 
             help='OVERWRITE qchip if specified, can optionally provide another file to overwrite instead')
-    parser.add_argument('--n-samples', default=po.N_SAMPLES, 
-            help='number of samples in readout acquisition buffer, default{}'.format(po.N_SAMPLES))
+    parser.add_argument('--n-samples', default=qs.N_SAMPLES, 
+            help='number of samples in readout acquisition buffer, default{}'.format(qs.N_SAMPLES))
     parser.add_argument('--cfg-file', default=None,
             help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
     parser.add_argument('--calirepo-dir', default='../submodules/qchip', 
@@ -32,7 +32,6 @@ if __name__=='__main__':
 
     qchip, inst_cfg, cfg_file = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
 
-    qubit_dict = po.get_qubit_dict(args.qubitids, qchip)
-
     sep = qs.run_qubit_sweep(['Q3'], ['Q2', 'Q3', 'Q4'], qchip, inst_cfg, np.linspace(5.e9, 5.5e9, 750))
+    print('done')
 
