@@ -125,7 +125,7 @@ def get_qubit_dict(qubitids, qchip):
             values: readout frequencies corresponding to each 
                     qubit, as specified by qchip
     """
-    qubits = qchip.paradict['Qubits']
+    qubits = qchip.cfg_dict['Qubits']
     qubitdict = {}
     for k, v in qubits.items():
         if k in qubitids:
