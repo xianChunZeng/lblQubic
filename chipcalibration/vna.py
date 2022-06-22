@@ -114,7 +114,7 @@ def run_vna(qchip, instrument_cfg, bw=VNA_BANDWIDTH, n_freq_points=N_FREQ_POINTS
     vna.run(100)
 
     orig_qubitdict = {}
-    for k, v in qchip.paradict['Qubits'].items():
+    for k, v in qchip.cfg_dict['Qubits'].items():
         if k[0] == 'Q':
             orig_qubitdict.update({k : v['readfreq']})
 
@@ -124,4 +124,4 @@ def run_vna(qchip, instrument_cfg, bw=VNA_BANDWIDTH, n_freq_points=N_FREQ_POINTS
 
 def update_qchip(qchip, freqs, qubitids):
     for i, qubitid in enumerate(qubitids):
-        qchip.updatecfg({('Qubits', qubitid, 'readfreq'): freqs[i]})
+        qchip.qubits[qubitid].readfreq = freqs[i]
