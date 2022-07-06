@@ -103,11 +103,9 @@ def run_punchout(qubit_dict, qchip, inst_cfg, fbw=FBW, n_freq=N_FREQ, atten_star
 def update_qchip(qchip, inst_cfg, freqs, attens, qubitids):
     globalatten = inst_cfg['wiremap'].ttydev['rdrvvat']['default']
     for i, qubitid in enumerate(qubitids):
-        #qchip.updatecfg({('Qubits', qubitid, 'readfreq'): freqs[i]})
         qchip.qubits[qubitid].readfreq = freqs[i]
         amp = 10**((attens[i] + globalatten)/20)
-        qchip.gates[qubitid + 'read'][0].amp = amp
-        qchip.updatecfg({('Gates', qubitid + 'read', 0, 'amp'): amp})
+        qchip.gates[qubitid + 'read'].contents[0].amp = amp
 
 def get_qubit_dict(qubitids, qchip):
     """
