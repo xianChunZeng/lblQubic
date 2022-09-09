@@ -25,13 +25,13 @@ if __name__=='__main__':
     parser.add_argument('--bandwidth', default=po.FBW, 
             help='frequency sweep bandwidth in Hz, default {}'.format(po.FBW))
     parser.add_argument('--n-freq', default=po.N_FREQ, help='frequency sweep bandwidth in Hz, default {}'.format(po.N_FREQ))
-    parser.add_argument('--atten-start', default=po.ATTEN_START, 
+    parser.add_argument('--atten-start', type=float, default=po.ATTEN_START, 
             help='starting (high) attenuation, default{}. Note that atten values are negative, so lower value means lower power'.format(po.ATTEN_START))
-    parser.add_argument('--atten-stop', default=po.ATTEN_STOP, 
+    parser.add_argument('--atten-stop', type=float, default=po.ATTEN_STOP, 
             help='ending (low) attenuation, default{}'.format(po.ATTEN_STOP))
-    parser.add_argument('--atten-step', default=po.ATTEN_STEP, 
+    parser.add_argument('--atten-step', type=float, default=po.ATTEN_STEP, 
             help='dB increment to use in atten sweep, default{}'.format(po.ATTEN_STEP))
-    parser.add_argument('--n-samples', default=po.N_SAMPLES, 
+    parser.add_argument('--n-samples', type=int, default=po.N_SAMPLES, 
             help='number of samples in readout acquisition buffer, default{}'.format(po.N_SAMPLES))
     parser.add_argument('--cfg-file', default=None,
             help='path to qubit config file (can be absolute or relative to calirepo/qchip directory. if none just use default file for qchip')
