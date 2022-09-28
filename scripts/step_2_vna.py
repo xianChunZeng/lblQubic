@@ -14,6 +14,8 @@ if __name__=='__main__':
     parser.add_argument('--qchip', required=True, help='name of chip (corresponds to qchip directory; e.g. X4Y2)')
     parser.add_argument('-bw', '--bandwidth', default=vna.VNA_BANDWIDTH,\
             help='VNA sweep BW in Hz, default: {}'.format(vna.VNA_BANDWIDTH))
+    parser.add_argument('-fc', '--center-freq', default=None,\
+            help='VNA center freq in Hz, default: readout LO freq (from wiremap)')
     parser.add_argument('-a', '--amplitude', default=vna.AMPLITUDE,\
             help='tone amplitude, default: {}'.format(vna.AMPLITUDE))
     parser.add_argument('-n', '--n-freq', default=vna.N_FREQ_POINTS,\
@@ -42,7 +44,7 @@ if __name__=='__main__':
 
     qchip, inst_cfg, cfg_file = load_chip(args.calirepo_dir, args.qchip, args.cfg_file)
 
-    peak_freqs = vna.run_vna(qchip, inst_cfg, args.bandwidth, args.n_freq, args.n_samples, args.amplitude)
+    peak_freqs = vna.run_vna(qchip, inst_cfg, args.center_freq, args.bandwidth, args.n_freq, args.n_samples, args.amplitude)
 
     if args.punchout:
         qubitdict = {'peak {}'.format(i) : peak_freqs[i] for i in range(len(peak_freqs))}
