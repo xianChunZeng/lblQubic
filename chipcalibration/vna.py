@@ -107,7 +107,7 @@ def find_peaks_phasediff(phases, sig_thresh=2):
 def run_vna(qchip, instrument_cfg, fc=None, bw=VNA_BANDWIDTH, n_freq_points=N_FREQ_POINTS, n_samples=N_SAMPLES, amplitude=AMPLITUDE, t_lo=TLO):
     vna = c_vna(qubitid='vna', qchip=qchip, instrument_cfg=instrument_cfg)
     if fc is None:
-        fc = vna.opts['wiremap'].lor #where do these come from? they should either not be class attributes or stay in VNA
+        fc = vna.opts['wiremap'].lor 
     #bw = vna.opts['chassis'].fsample
     #fx=numpy.linspace(6.2e9,6.7e9,2000)
     fx = np.linspace(fc - bw/2, fc + bw/2, n_freq_points)
