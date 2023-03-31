@@ -63,7 +63,7 @@ def _make_punchout_circuits(qubit_dict, qchip, freq_bandwidth=FBW, n_freq=N_FREQ
     freqs = {qubit: qubit_dict[qubit] + freqoffs for qubit in qubit_dict.keys()}
     circuits = []
     for atten in attens:
-        amp = 10**np.log10(atten/20)
+        amp = 10**(-atten/20)
         circuit = []
         for qubit in qubit_dict:
             for freq in freqs[qubit]:
@@ -115,7 +115,7 @@ def run_punchout(qubit_dict, qchip, fpga_config, channel_configs, circuit_runner
         raw_asm = tc.run_assemble_stage(compiled_prog, channel_configs)
         for core_ind in raw_asm.keys():
             circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
-        iq_shots = circuit_runner.run_circuit(nshot, navg, n_freq, delay=0.005*nshot)
+        iq_shots = circuit_runner.run_circuit(nshot, navg, n_freq, delay=0.5)
         for qubit in qubit_dict.keys():
             s11[qubit][i] = np.average(np.reshape(iq_shots[chanmap[qubit]], (-1, n_freq)), axis=0)
 
