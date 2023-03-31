@@ -107,16 +107,15 @@ def run_punchout(qubit_dict, qchip, fpga_config, channel_configs, circuit_runner
 
     chanmap = {qubit: channel_configs[qubit + '.rdrv'].core_ind for qubit in qubit_dict.keys()}
     s11 = {qubit: np.zeros((len(attens), n_freq), dtype=np.complex128) for qubit in qubit_dict.keys()}
-    samples_per_avg = 1000//n_freq
-    nshot = n_freq*samples_per_avg
-    navg = int(np.ceil(n_samples/samples_per_avg))
+    nshot = 1000//n_freq
+    navg = int(np.ceil(n_samples/nshot))
 
     for i, circuit in enumerate(circuits):
         compiled_prog = tc.run_compile_stage(circuit, fpga_config, qchip)
         raw_asm = tc.run_assemble_stage(compiled_prog, channel_configs)
         for core_ind in raw_asm.keys():
-            circuit_runner.load_circuit(core_ind, raw_asm[core_ind]['cmd_list'])
-        iq_shots = circuit_runner.run_circuit(nshot, navg, n_freq, delay=0.05*nshot)
+            circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
+        iq_shots = circuit_runner.run_circuit(nshot, navg, n_freq, delay=0.005*nshot)
         for qubit in qubit_dict.keys():
             s11[qubit][i] = np.average(np.reshape(iq_shots[chanmap[qubit]], (-1, n_freq)), axis=0)
 
