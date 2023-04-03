@@ -18,14 +18,15 @@ ATTEN_START = 12
 ATTEN_STOP = 35
 ATTEN_STEP = 1.0
 N_SAMPLES = 100
-RINGDOWN_TIME = 400.e-6
+RINGDOWN_TIME = 40.e-6
+ACC_BUFSIZE = 1000
 
 class PunchoutGUI:
     """
     Implements clickable GUI for selecting resonator power/freq
     """
 
-    def __init__(self, s11, sweep_index=None, qubitid=''):
+    def __init__(self, freqs, attens, s11, qubitid=None):
         """
         Parameters
         ----------
@@ -37,13 +38,16 @@ class PunchoutGUI:
         self.freq = None
         self.atten = None
 
+        amp = np.abs(s11)
+        phase = np.unwrap(np.angle(s11), axis=1)
+
         self.fig1 = plt.figure(figsize=(10, 10))
         self.sub = self.fig1.subplots(2, 2)
         self.fig1.suptitle(qubitid)
-        punchout.plotamp(self.sub[0, 0], sweep_index)
-        punchout.plotang(self.sub[0, 1], sweep_index)
-        punchout.plotampdiff(self.sub[1, 0], sweep_index)
-        punchout.plotangdiff(self.sub[1, 1], sweep_index)
+        self.sub[0, 0].pcolormesh(freqs, -attens, amp)
+        self.sub[0, 1].pcolormesh(freqs, -attens, phase)
+        self.sub[1, 0].pcolormesh(freqs[:-1], -attens, np.diff(amp, axis=1))
+        self.sub[1, 1].pcolormesh(freqs[:-1], -attens, np.diff(phase, axis=1))
         self.fig1.canvas.mpl_connect('button_press_event', self.onClick)
         print('Click any plot to select desired resonator attenuation and frequency. If this is not a resonator, click outside the plot to remove from config')
         plt.show()
@@ -54,73 +58,82 @@ class PunchoutGUI:
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
         print('Click again to change, otherwise close')
 
-def _make_punchout_circuits(qubit_dict, qchip, freq_bandwidth=FBW, n_freq=N_FREQ, atten_start=ATTEN_START, 
-                          atten_stop=ATTEN_STOP, atten_step=ATTEN_STEP):
-    if n_freq > 1000:
-        raise Exception('acc buf too small')
-    freqoffs = np.linspace(-freq_bandwidth/2, freq_bandwidth/2, n_freq)
-    attens = np.arange(atten_start, atten_stop, atten_step)
-    freqs = {qubit: qubit_dict[qubit] + freqoffs for qubit in qubit_dict.keys()}
-    circuits = []
-    for atten in attens:
-        amp = 10**(-atten/20)
-        circuit = []
-        for qubit in qubit_dict:
-            for freq in freqs[qubit]:
-                circuit.append({'name': 'delay', 't': RINGDOWN_TIME, 'qubit': [qubit]})
-                circuit.append({'name': 'read', 'qubit': [qubit], 'modi': {(0, 'fcarrier'): freq, 
-                                                                           (1, 'fcarrier'): freq,
-                                                                           (0, 'amp'): amp}})
-        circuits.append(circuit)
+class Punchout:
 
-    return freqs, attens, circuits
+    def __init__(self, qchip, fpga_config, channel_configs, qubits=None, 
+                 qubit_dict=None, freq_bandwidth=FBW, n_freq=N_FREQ, 
+                 atten_start=ATTEN_START, atten_stop=ATTEN_STOP, atten_step=ATTEN_STEP):
 
+        if n_freq > ACC_BUFSIZE:
+            raise Exception('acc buf too small')
 
-def run_punchout(qubit_dict, qchip, fpga_config, channel_configs, circuit_runner, fbw=FBW, n_freq=N_FREQ, 
-                        atten_start=ATTEN_START, atten_stop=ATTEN_STOP, atten_step=ATTEN_STEP, n_samples=N_SAMPLES):
-    """
-    Runs punchout sweep on selected qubit, plots results in clickable GUI. 
-    TODO: this should also update configs.
+        if qubit_dict is None:
+            assert qubits is not None
+            qubit_dict = get_qubit_dict(qubits, qchip)
 
-    Parameters
-    ----------
-        qubitid : str
-            qubit identifier
-        fbw : float
-            sweep bandwidth around initial res freq estimate
-        n_freq : int
-            number of freq points in sweep
-        circuit_runner : CircuitRunner object
-        atten_start, atten_stop, atten_step : int
-            parameters for atten sweep
-        n_samples : int
-            ??
-    """
+        self.chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubit_dict.keys()}
 
-    freqs, attens, circuits = _make_punchout_circuits(qubit_dict, qchip, fbw, n_freq, atten_start, atten_stop, 
-                                                     atten_step)
+        freqoffs = np.linspace(-freq_bandwidth/2, freq_bandwidth/2, n_freq)
+        self.attens = np.arange(atten_start, atten_stop, atten_step)
+        self.freqs = {qubit: qubit_dict[qubit] + freqoffs for qubit in qubit_dict.keys()}
 
-    # compile first circuit and load all memory
-    compiled_prog = tc.run_compile_stage(circuits[0], fpga_config, qchip)
-    raw_asm = tc.run_assemble_stage(compiled_prog, channel_configs)
-    circuit_runner.load_circuit(raw_asm)
+        circuits = self._make_punchout_circuits(qubit_dict, qchip, self.freqs, self.attens)
+        compiled_progs = tc.run_compile_stage(circuits, fpga_config, qchip)
+        self.raw_asm_progs = tc.run_assemble_stage(compiled_progs, channel_configs)
+        
 
-    chanmap = {qubit: channel_configs[qubit + '.rdrv'].core_ind for qubit in qubit_dict.keys()}
-    s11 = {qubit: np.zeros((len(attens), n_freq), dtype=np.complex128) for qubit in qubit_dict.keys()}
-    nshot = 1000//n_freq
-    navg = int(np.ceil(n_samples/nshot))
+    def _make_punchout_circuits(self, qubit_dict, qchip, freqs, attens):
+        circuits = []
+        for atten in attens:
+            amp = 10**(-atten/20)
+            circuit = []
+            for qubit in qubit_dict:
+                for freq in freqs[qubit]:
+                    circuit.append({'name': 'delay', 't': RINGDOWN_TIME, 'qubit': [qubit]})
+                    circuit.append({'name': 'read', 'qubit': [qubit], 'modi': {(0, 'fcarrier'): freq, 
+                                                                               (1, 'fcarrier'): freq,
+                                                                               (0, 'amp'): amp}})
+            circuits.append(circuit)
+    
+        return freqs, attens, circuits
+    
 
-    for i, circuit in enumerate(circuits):
-        compiled_prog = tc.run_compile_stage(circuit, fpga_config, qchip)
-        raw_asm = tc.run_assemble_stage(compiled_prog, channel_configs)
-        for core_ind in raw_asm.keys():
-            circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
-        iq_shots = circuit_runner.run_circuit(nshot, navg, n_freq, delay=0.5)
-        for qubit in qubit_dict.keys():
-            s11[qubit][i] = np.average(np.reshape(iq_shots[chanmap[qubit]], (-1, n_freq)), axis=0)
+    def run(self, circuit_runner, n_samples=N_SAMPLES):
+        """
+        Runs punchout sweep on selected qubit, plots results in clickable GUI. 
+        TODO: this should also update configs.
+    
+        Parameters
+        ----------
+            qubitid : str
+                qubit identifier
+            fbw : float
+                sweep bandwidth around initial res freq estimate
+            n_freq : int
+                number of freq points in sweep
+            circuit_runner : CircuitRunner object
+            atten_start, atten_stop, atten_step : int
+                parameters for atten sweep
+            n_samples : int
+                ??
+        """
+    
+        # compile first circuit and load all memory
+        circuit_runner.load_circuit(self.raw_asm_progs[0])
+    
+        s11 = {qubit: np.zeros((len(self.attens), len(self.freqs)), dtype=np.complex128) for qubit in self.chanmap.keys()}
+        nshot = ACC_BUFSIZE//len(self.freqs)
+        navg = int(np.ceil(n_samples/nshot))
+    
+        for i, raw_asm in enumerate(self.raw_asm_progs):
+            for core_ind in raw_asm.keys():
+                circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
+            iq_shots = circuit_runner.run_circuit(nshot, navg, len(self.freqs), delay=0.1)
+            for qubit in self.chanmap.keys():
+                s11[qubit][i] = np.average(np.reshape(iq_shots[self.chanmap[qubit]], (-1, len(self.freqs))), axis=0) 
 
-    return s11
-
+        self.s11 = s11
+    
      
     #for i in range(len(qubitids)):
     #    cal_gui = PunchoutGUI(punchout, i, qubitids[i])
