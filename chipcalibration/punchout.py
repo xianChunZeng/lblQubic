@@ -11,6 +11,7 @@ import numpy as np
 import sys
 import qubic.toolchain as tc
 import qubic.run as rc
+import pdb
 
 FBW = 6e6 
 N_FREQ = 200
@@ -40,19 +41,22 @@ class PunchoutGUI:
 
         amp = np.abs(s11)
         phase = np.unwrap(np.angle(s11), axis=1)
+        phasefit = np.polyfit(np.arange(len(phase.T)), phase.T, deg=1)
+        phase -= np.transpose(phasefit[0]*np.tile(np.arange(len(phase.T)), (len(attens), 1)).T + phasefit[1])
+        #pdb.set_trace()
 
         self.fig1 = plt.figure(figsize=(10, 10))
         self.sub = self.fig1.subplots(2, 2)
         self.fig1.suptitle(qubitid)
-        self.sub[0, 0].pcolormesh(freqs, -attens, amp)
+        self.sub[0, 0].pcolormesh(freqs, -attens, 20*np.log10(amp))
         self.sub[0, 1].pcolormesh(freqs, -attens, phase)
-        self.sub[1, 0].pcolormesh(freqs[:-1], -attens, np.diff(amp, axis=1))
+        self.sub[1, 0].pcolormesh(freqs[:-1], -attens, np.diff(20*np.log10(amp), axis=1))
         self.sub[1, 1].pcolormesh(freqs[:-1], -attens, np.diff(phase, axis=1))
-        self.fig1.canvas.mpl_connect('button_press_event', self.onClick)
+        self.fig1.canvas.mpl_connect('button_press_event', self.on_click)
         print('Click any plot to select desired resonator attenuation and frequency. If this is not a resonator, click outside the plot to remove from config')
         plt.show()
 
-    def onClick(self, event):
+    def on_click(self, event):
         self.freq = event.xdata
         self.atten = event.ydata
         print('Selected resonator frequency {} and attenutation {}'.format(self.freq, self.atten))
@@ -72,6 +76,7 @@ class Punchout:
             qubit_dict = get_qubit_dict(qubits, qchip)
 
         self.chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubit_dict.keys()}
+        self.qubits = qubits
 
         freqoffs = np.linspace(-freq_bandwidth/2, freq_bandwidth/2, n_freq)
         self.attens = np.arange(atten_start, atten_stop, atten_step)
@@ -95,7 +100,7 @@ class Punchout:
                                                                                (0, 'amp'): amp}})
             circuits.append(circuit)
     
-        return freqs, attens, circuits
+        return circuits
     
 
     def run(self, circuit_runner, n_samples=N_SAMPLES):
@@ -121,32 +126,42 @@ class Punchout:
         # compile first circuit and load all memory
         circuit_runner.load_circuit(self.raw_asm_progs[0])
     
-        s11 = {qubit: np.zeros((len(self.attens), len(self.freqs)), dtype=np.complex128) for qubit in self.chanmap.keys()}
-        nshot = ACC_BUFSIZE//len(self.freqs)
+        nfreq = len(self.freqs[self.qubits[0]])
+        s11 = {qubit: np.zeros((len(self.attens), nfreq), dtype=np.complex128) for qubit in self.chanmap.keys()}
+        nshot = ACC_BUFSIZE//nfreq
         navg = int(np.ceil(n_samples/nshot))
     
         for i, raw_asm in enumerate(self.raw_asm_progs):
             for core_ind in raw_asm.keys():
                 circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
-            iq_shots = circuit_runner.run_circuit(nshot, navg, len(self.freqs), delay=0.1)
+            iq_shots = circuit_runner.run_circuit(nshot, navg, nfreq, delay=0.1)
             for qubit in self.chanmap.keys():
-                s11[qubit][i] = np.average(np.reshape(iq_shots[self.chanmap[qubit]], (-1, len(self.freqs))), axis=0) 
+                s11[qubit][i] = np.average(np.reshape(iq_shots[self.chanmap[qubit]], (-1, nfreq)), axis=0) 
 
         self.s11 = s11
     
-     
-    #for i in range(len(qubitids)):
-    #    cal_gui = PunchoutGUI(punchout, i, qubitids[i])
-    #    freq.append(cal_gui.freq)
-    #    atten.append(cal_gui.atten)
+    def run_punchout_gui(self):
+        self.optimal_freq = {}
+        self.optimal_atten = {}
+        self.cal_gui = {}
+        for qubit in self.qubits:
+            self.cal_gui[qubit] = PunchoutGUI(self.freqs[qubit], self.attens, self.s11[qubit], qubit)
+            self.optimal_freq[qubit] = self.cal_gui[qubit].freq
+            self.optimal_atten[qubit] = self.cal_gui[qubit].atten
 
-    #return freq, atten, qubitids
+    def get_calgui_vals(self):
+        """
+        Run this if using jupyter
+        """
+        for qubit in self.qubits:
+            self.optimal_freq[qubit] = self.cal_gui[qubit].freq
+            self.optimal_atten[qubit] = self.cal_gui[qubit].atten
 
-def update_qchip(qchip, inst_cfg, freqs, attens, qubitids):
-    for i, qubitid in enumerate(qubitids):
-        qchip.qubits[qubitid].readfreq = freqs[i]
-        amp = 10**((attens[i] + globalatten)/20)
-        qchip.gates[qubitid + 'read'].contents[0].amp = amp
+    def update_qchip(self, qchip):
+        for qubit in self.qubits:
+            qchip.qubits[qubit].readfreq = self.optimal_freq[qubit]
+            amp = 10**((self.optimal_atten[qubit])/20)
+            qchip.gates[qubit + 'read'].contents[0].amp = amp
 
 def get_qubit_dict(qubitids, qchip):
     """
