@@ -8,8 +8,14 @@ from qubic.state_disc import GMMManager
 ACC_BUFSIZE = 1000
 
 class Chevron:
+    """
+    Define circuits, take data, and plot Chevron patterns
+    """
 
     def __init__(self, qubits, freqspan, nfreq, pulse_widths, qchip, fpga_config, channel_configs):
+        """
+        Create chevron circuits according to input parameters, then compile to asm binaries.
+        """
         self.circuits = self._make_chevron_circuits(qubits, freqspan, nfreq, pulse_widths, qchip)
         self.qubits = qubits
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubits}
@@ -18,6 +24,12 @@ class Chevron:
         self.raw_asm_progs = tc.run_assemble_stage(compiled_progs, channel_configs)
 
     def _make_chevron_circuits(self, qubits, freqspan, nfreq, pulse_widths, qchip):
+        """
+        Make list of circuits used for chevron pattern measurement. Each circuit covers the 
+        full range of frequencies, and a single pulse width. So there will be a total of 
+        len(pulse_widths) circuits, each of which contains nfreq measurements. A 400 us 
+        delay is inserted between each measurement.
+        """
         circuits = []
         self.freqoffsets = np.linspace(-freqspan/2, freqspan/2, nfreq)
         self.pulse_widths = pulse_widths
@@ -34,6 +46,14 @@ class Chevron:
         return circuits
 
     def run(self, circuit_runner, nsamples):
+        """
+        Run the chevron circuit with nsamples shots per freq x pulse_width point.
+
+        Parameters
+        ----------
+            circuit_runner : CircuitRunner object
+            nsamples : int
+        """
         reads_per_shot = len(self.freqoffsets)
         nshot = ACC_BUFSIZE//reads_per_shot
         navg = int(np.ceil(nsamples/nshot))
@@ -43,8 +63,8 @@ class Chevron:
         for i, raw_asm in enumerate(self.raw_asm_progs):
             circuit_runner.load_circuit(raw_asm)
             shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
-            for chan, iqdata in shots:
-                self.s11[chan][i] = np.reshape(iqdata, (nshot*navg, len(self.freqoffsets)))
+            for chan, iqdata in shots.items():
+                self.s11[chan][i] = np.reshape(iqdata, (nshot*navg, len(self.freqoffsets))).T
 
         self._fit_gmm()
 
