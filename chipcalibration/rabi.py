@@ -32,7 +32,7 @@ class Rabi:
         self.pulse_widths = pulse_widths
         cur_circ = []
         for twidth in pulse_widths:
-            cur_circ.append({'name': 'rabi', 'qubit': [drvqubit], 'modi': {(0, 'twidth'): twidth }})
+            cur_circ.append({'name': 'rabi', 'qubit': drvqubit, 'modi': {(0, 'twidth'): twidth }})
             for qubit in readqubits:
                 cur_circ.append({'name': 'read', 'qubit': [qubit]})
             cur_circ.append({'name': 'delay', 't': 400.e-6})
