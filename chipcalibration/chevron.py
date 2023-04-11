@@ -54,18 +54,9 @@ class Chevron:
             circuit_runner : CircuitRunner object
             nsamples : int
         """
-        reads_per_shot = len(self.freqoffsets)
-        nshot = ACC_BUFSIZE//reads_per_shot
-        navg = int(np.ceil(nsamples/nshot))
-        self.s11 = {chan: np.zeros((len(self.pulse_widths), len(self.freqoffsets), nshot*navg), dtype=np.complex128) 
-                    for chan in self.readout_chanmap.values()}
-
-        for i, raw_asm in enumerate(self.raw_asm_progs):
-            circuit_runner.load_circuit(raw_asm)
-            shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
-            for chan, iqdata in shots.items():
-                self.s11[chan][i] = np.reshape(iqdata, (nshot*navg, len(self.freqoffsets))).T
-
+        self.s11 = circuit_runner.run_circuit_batch(self.raw_asm_progs, nsamples, len(self.freqoffsets), 
+                                                    delay_per_shot=len(self.freqoffsets)*500.e-6)
+        self.s11 = np.transpose(self.s11, (0, 2, 1)) # shape of s11 is pulse_widths x n_freq x nsamples
         self._fit_gmm()
 
     def _fit_gmm(self):
@@ -75,3 +66,7 @@ class Chevron:
         self.state_disc_shots = self.gmm_manager.predict(self.s11)
         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=2) for qubit in self.state_disc_shots.keys()}
         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=2) for qubit in self.state_disc_shots.keys()}
+
+    def plot(self, qubit):
+        plt.pcolormesh(self.pulse_widths, self.freqoffsets, self.ones_frac[qubit].T)
+        plt.show()

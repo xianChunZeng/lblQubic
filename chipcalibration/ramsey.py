@@ -8,13 +8,13 @@ from qubic.state_disc import GMMManager
 ACC_BUFSIZE = 1000
 
 class Ramsey:
-	"""
-	Define circuits, take data, and plot Ramsey patterns
-	"""
-	def __init__(self, qubits, delaytime, qchip, fpga_config, channel_configs):
-		"""
-		Create rabi circuits according to input parameters, then compile to asm binaries.
-		"""
+    """
+    Define circuits, take data, and plot Ramsey patterns
+    """
+    def __init__(self, qubits, delaytime, qchip, fpga_config, channel_configs):
+        """
+        Create rabi circuits according to input parameters, then compile to asm binaries.
+        """
         self.circuits = self._make_ramsey_circuits(qubiits, delaytime, qchip)
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubits}
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
@@ -36,18 +36,18 @@ class Ramsey:
 #        cur_circ = []
         for dtime in delaytime:
             for qubit in qubits:
-				circuit.append({'name': 'X90', 'qubit': [qubit]})
-				circuit.append({'name': 'delay', 't': dtime, 'qubit':[qubit]})
-				circuit.append({'name': 'X90', 'qubit': [qubit]})
-				circuit.append({'name': 'read', 'qubit': [qubit]})
-				circuit.append({'name': 'delay', 't': 400.e-6, 'qubit': [qubit]})
+                circuit.append({'name': 'X90', 'qubit': [qubit]})
+                circuit.append({'name': 'delay', 't': dtime, 'qubit':[qubit]})
+                circuit.append({'name': 'X90', 'qubit': [qubit]})
+                circuit.append({'name': 'read', 'qubit': [qubit]})
+                circuit.append({'name': 'delay', 't': 400.e-6, 'qubit': [qubit]})
         return circuit
         
         
-	def run(self, circuit_runner, nsamples):
-		"""
+    def run(self, circuit_runner, nsamples):
+        """
         Run the ramsey circuit with nsamples shots.
-
+    
         Parameters
         ----------
             circuit_runner : CircuitRunner object
@@ -61,6 +61,9 @@ class Ramsey:
         self.state_disc_shots = self.gmm_manager.predict(self.s11)
         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=0) for qubit in self.state_disc_shots.keys()}
         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=0) for qubit in self.state_disc_shots.keys()}
+    
+    def fit_ramsey_freq(self):
+                
 
         
 	

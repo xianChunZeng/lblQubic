@@ -30,13 +30,13 @@ class Rabi:
         """
         circuits = []
         self.pulse_widths = pulse_widths
-        cur_circ = []
         for twidth in pulse_widths:
+            cur_circ = []
+            cur_circ.append({'name': 'delay', 't': 400.e-6})
             cur_circ.append({'name': 'rabi', 'qubit': drvqubit, 'modi': {(0, 'twidth'): twidth }})
             for qubit in readqubits:
                 cur_circ.append({'name': 'read', 'qubit': [qubit]})
-            cur_circ.append({'name': 'delay', 't': 400.e-6})
-        circuits.append(cur_circ)
+            circuits.append(cur_circ)
         return circuits
 
     def run(self, circuit_runner, nsamples):
@@ -48,17 +48,20 @@ class Rabi:
             circuit_runner : CircuitRunner object
             nsamples : int
         """
-        reads_per_shot = len(self.pulse_widths)
-        nshot = ACC_BUFSIZE//reads_per_shot
+        reads_per_shot = 1 
+        nshot = min(ACC_BUFSIZE//reads_per_shot,nsamples)
         navg = int(np.ceil(nsamples/nshot))
-        self.s11 = {chan: np.zeros((len(self.pulse_widths), nshot*navg), dtype=np.complex128) 
+        self.s11 = {chan: np.zeros((len(self.pulse_widths), nshot*navg), dtype=np.complex128)
                     for chan in self.readout_chanmap.values()}
+        print((len(self.pulse_widths), nshot*navg))        
+        print('nshot',nshot,'navg',navg)        
 
         for i, raw_asm in enumerate(self.raw_asm_progs):
+            print(i)
             circuit_runner.load_circuit(raw_asm)
             shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
             for chan, iqdata in shots.items():
-                self.s11[chan][i] = iqdata
+                self.s11[chan][i] = iqdata #np.reshape(iqdata, (nshot*navg, len(self.pulse_widths))).T
 
         self._fit_gmm()
 
@@ -67,5 +70,5 @@ class Rabi:
         self.gmm_manager.set_labels_maxtomin({chan: shots[np.argmin(self.pulse_widths)].flatten() 
                                               for chan, shots in self.s11.items()}, [0, 1])
         self.state_disc_shots = self.gmm_manager.predict(self.s11)
-        self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=2) for qubit in self.state_disc_shots.keys()}
-        self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=2) for qubit in self.state_disc_shots.keys()}
+        self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit],axis=1) for qubit in self.state_disc_shots.keys()}
+        self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0,axis=1) for qubit in self.state_disc_shots.keys()}

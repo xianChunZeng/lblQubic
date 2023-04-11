@@ -63,10 +63,37 @@ class PunchoutGUI:
         print('Click again to change, otherwise close')
 
 class Punchout:
+    """
+    Class for defining and running circuits to take punchout measurements. General usage is:
+        # create CircuitRunner object
+        punchout = Punchout(<circuit_parameters_and_configs>) # initialize and make circuits
+        punchout.run(circuit_runner, nshots) # take data
+        punchout.run_punchout_gui() 
+        # click on optimal values in plots
+        punchout.get_calgui_vals() # necessary if running in notebook
+        punchout.update_qchip(qchip) # update configs
+    """
 
     def __init__(self, qchip, fpga_config, channel_configs, qubits=None, 
                  qubit_dict=None, freq_bandwidth=FBW, n_freq=N_FREQ, 
                  atten_start=ATTEN_START, atten_stop=ATTEN_STOP, atten_step=ATTEN_STEP):
+        """
+        Parameters
+        ----------
+            qchip : qubitconfig.qchip.QChip object
+            fpga_config : FPGAConfig
+            channel_configs : dict
+            qubits : list
+            freq_bandwidth : float
+                Sweep bandwidth in Hz
+            n_freq : int
+            atten_start : int
+                low atten value (positive int) in dB
+            atten_stop : int
+                high atten value in dB
+            atten_step : int
+
+        """
 
         if n_freq > ACC_BUFSIZE:
             raise Exception('acc buf too small')
@@ -105,41 +132,34 @@ class Punchout:
 
     def run(self, circuit_runner, n_samples=N_SAMPLES):
         """
-        Runs punchout sweep on selected qubit, plots results in clickable GUI. 
-        TODO: this should also update configs.
+        Run the punchout sweeps
     
         Parameters
         ----------
-            qubitid : str
-                qubit identifier
-            fbw : float
-                sweep bandwidth around initial res freq estimate
-            n_freq : int
-                number of freq points in sweep
-            circuit_runner : CircuitRunner object
-            atten_start, atten_stop, atten_step : int
-                parameters for atten sweep
-            n_samples : int
-                ??
+            circuit_runnr : qubic.run.CircuitRunner object
+            n_samples : int 
+                number of shots per frequency
         """
     
         # compile first circuit and load all memory
         circuit_runner.load_circuit(self.raw_asm_progs[0])
     
         nfreq = len(self.freqs[self.qubits[0]])
-        s11 = {qubit: np.zeros((len(self.attens), nfreq), dtype=np.complex128) for qubit in self.chanmap.keys()}
-        nshot = ACC_BUFSIZE//nfreq
-        navg = int(np.ceil(n_samples/nshot))
-    
-        for i, raw_asm in enumerate(self.raw_asm_progs):
-            for core_ind in raw_asm.keys():
-                circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
-            iq_shots = circuit_runner.run_circuit(nshot, navg, nfreq, delay=0.1)
-            for qubit in self.chanmap.keys():
-                s11[qubit][i] = np.average(np.reshape(iq_shots[self.chanmap[qubit]], (-1, nfreq)), axis=0) 
+        s11 = {qubit: np.zeros((len(self.attens), nfreq), dtype=np.complex128) for qubit in self.chanmap.keys()}    
+        # for i, raw_asm in enumerate(self.raw_asm_progs):
+        #     for core_ind in raw_asm.keys():
+        #         circuit_runner.load_command_buf(core_ind, raw_asm[core_ind]['cmd_list'])
+        #     iq_shots = circuit_runner.run_circuit(nshot, navg, nfreq, delay=0.1)
+        #     for qubit in self.chanmap.keys():
+        #         s11[qubit][i] = np.average(np.reshape(iq_shots[self.chanmap[qubit]], (-1, nfreq)), axis=0) 
+        s11_raw = circuit_runner.run_circuit_batch(self.raw_asm_progs, n_samples, nfreq, delay_per_shot=RINGDOWN_TIME*1.25*nfreq,
+                                         reload_cmd=True, reload_freq=False, reload_env=False)
+
+        for qubit, chan in self.chanmap.items():
+            s11[qubit] = np.average(s11_raw[chan], axis=1)
 
         self.s11 = s11
-    
+
     def run_punchout_gui(self):
         self.optimal_freq = {}
         self.optimal_atten = {}
