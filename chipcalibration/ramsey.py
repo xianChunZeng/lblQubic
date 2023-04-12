@@ -4,6 +4,7 @@ import sys
 import qubic.toolchain as tc
 import qubic.run as rc
 from qubic.state_disc import GMMManager
+from scipy.optimize import curve_fit
 
 ACC_BUFSIZE = 1000
 
@@ -54,15 +55,18 @@ class Ramsey:
             nsamples : int
         """
         circuit_runner.load_circuit(self.raw_as_progs)
-        s11 = circuit_runner.run_circuit(nsample,len(delaytime), delay=400e-6*len(delaytime)*nsamples)
-        
+        self.s11 = circuit_runner.run_circuit(nsample,len(delaytime), delay=400e-6*len(delaytime)*nsamples)
+
+    def _fit_gmm(self):
         self.gmm_manager.fit(self.s11)
         self.gmm_manager.set_labels_maxtomin({chan: data[:,0] for chan, data in self.s11.items()},labels_maxtomin = [1,0])
         self.state_disc_shots = self.gmm_manager.predict(self.s11)
         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=0) for qubit in self.state_disc_shots.keys()}
         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=0) for qubit in self.state_disc_shots.keys()}
-    
+
+
     def fit_ramsey_freq(self):
+        pass
                 
 
         

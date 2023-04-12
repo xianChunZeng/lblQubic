@@ -33,7 +33,8 @@ class Rabi:
         for twidth in pulse_widths:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
-            cur_circ.append({'name': 'rabi', 'qubit': drvqubit, 'modi': {(0, 'twidth'): twidth }})
+            cur_circ.append({'name': 'rabi', 'qubit': drvqubit, 'modi': {(0, 'twidth'): twidth}})
+            cur_circ.append({'name': 'barrier', 'qubit': readqubits})
             for qubit in readqubits:
                 cur_circ.append({'name': 'read', 'qubit': [qubit]})
             circuits.append(cur_circ)
@@ -49,20 +50,20 @@ class Rabi:
             nsamples : int
         """
         reads_per_shot = 1 
-        nshot = min(ACC_BUFSIZE//reads_per_shot,nsamples)
-        navg = int(np.ceil(nsamples/nshot))
-        self.s11 = {chan: np.zeros((len(self.pulse_widths), nshot*navg), dtype=np.complex128)
-                    for chan in self.readout_chanmap.values()}
-        print((len(self.pulse_widths), nshot*navg))        
-        print('nshot',nshot,'navg',navg)        
+        #nshot = min(ACC_BUFSIZE//reads_per_shot,nsamples)
+        #navg = int(np.ceil(nsamples/nshot))
+        #self.s11 = {chan: np.zeros((len(self.pulse_widths), nshot*navg), dtype=np.complex128)
+        #            for chan in self.readout_chanmap.values()}
+        #print((len(self.pulse_widths), nshot*navg))        
+        #print('nshot',nshot,'navg',navg)        
 
-        for i, raw_asm in enumerate(self.raw_asm_progs):
-            print(i)
-            circuit_runner.load_circuit(raw_asm)
-            shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
-            for chan, iqdata in shots.items():
-                self.s11[chan][i] = iqdata #np.reshape(iqdata, (nshot*navg, len(self.pulse_widths))).T
-
+        #for i, raw_asm in enumerate(self.raw_asm_progs):
+        #    print(i)
+        #    circuit_runner.load_circuit(raw_asm)
+        #    shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
+        #    for chan, iqdata in shots.items():
+        #        self.s11[chan][i] = iqdata #np.reshape(iqdata, (nshot*navg, len(self.pulse_widths))).T
+        self.s11 = circuit_runner.run_circuit_batch(self.raw_asm_progs, nsamples, 1, delay_per_shot=5000.e-6)
         self._fit_gmm()
 
     def _fit_gmm(self):
