@@ -64,6 +64,7 @@ class RabiAmpSweeper:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
             cur_circ.append({'name': 'rabi', 'qubit': [drvqubit], 'modi': {(0, 'amp'): amp, (0, 'twidth') : self.twidth}})
+            cur_circ.append({'name': 'barrier', 'qubit': self.register})
             for qid in self.register:
                     cur_circ.append({'name': 'read', 'qubit': [qid]})
             circuits.append(cur_circ)
