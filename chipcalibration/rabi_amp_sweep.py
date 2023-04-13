@@ -90,7 +90,7 @@ class RabiAmpSweeper:
                 self._assembled_circuits[qid].append(raw_asm_progs)
     
 
-    def run_and_fit(self, circuit_runner, num_samples, prior_fit_params):
+    def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True):
         """
         Run Rabi amplitude pulses on all the qubits and record the Xpi/2 gate times 
 
@@ -98,10 +98,14 @@ class RabiAmpSweeper:
         ----------
             circuit_runner : CircuitRunner object
             nsamples : int
+            prior_fit_params : dict
+                keys are qubits, values are lists of parameters:
+                    [A, B, drive_period, phi] such that
+                    one_state_pop = A*cos(2*pi*x/drive_period + phi) + B
         """
         self._take_all_data(circuit_runner, num_samples)
         self._fit_gmm()
-        self._fit_count_data(prior_fit_params)
+        self._fit_count_data(prior_fit_params, use_fft)
 
         #self._fit_gmm()
 
@@ -115,7 +119,7 @@ class RabiAmpSweeper:
         self.num_shots = num_samples
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
-            print(f"Taking data for qubit {drive_qid} in batch {idx} of {len(self.register)}")
+            print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
             self.raw_shots[drive_qid] = circuit_runner.run_circuit_batch(self._assembled_circuits[drive_qid], num_samples)
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
@@ -130,20 +134,20 @@ class RabiAmpSweeper:
         avg_response = {qid : np.zeros(self.num_partitions) for qid in sub_register}
         for cidx in range(self.num_partitions):
             for qid in sub_register:
-                avg_response[qid][cidx] = np.average(self.dataset[target_qid][cidx][qid].flatten())
+                avg_response[qid][cidx] = np.average(self.dataset[target_qid][qid][cidx].flatten())
         
         if len(sub_register) == 1:
-            axs.scatter(self.ampltidues, avg_response[sub_register[0]])
+            axs.scatter(self.amplitudes, avg_response[sub_register[0]])
             axs.set_title(f'Counts on {target_qid} with drive on {target_qid}')
         else:
             for idx, qid in enumerate(sub_register):
                 axs[idx].set_title(f'Counts on {qid} with drive on {target_qid}')
                 axs[idx].scatter(self.amplitudes, avg_response[qid])
         if show_fits is True:
-            if len(sub_register) == 1:          
-                axs.plot(self.amplitudes, self._sin(self.amplitudes, *self.fits[target_qid][0]), c='red')
+            if len(sub_register) == 1:
+                axs.plot(self.amplitudes, self._cos(self.amplitudes, *self.fits[target_qid][0]), c='red')
             else:
-                axs[sub_register.index(target_qid)].plot(self.amplitudes, self._sin(self.amplitudes, *self.fits[target_qid][0]), c='red')
+                axs[sub_register.index(target_qid)].plot(self.amplitudes, self._cos(self.amplitudes, *self.fits[target_qid][0]), c='red')
         
         plt.tight_layout()
         plt.show()
@@ -177,27 +181,32 @@ class RabiAmpSweeper:
 
         plt.show()
 
-    def _sin(self, x, A, B, drive_period, phi):
-        return A*np.sin(2*np.pi*x/drive_period - phi) + B
+    def _cos(self, x, A, B, drive_period, phi):
+        return A*np.cos(2*np.pi*x/drive_period - phi) + B
 
     def _fit_raw_data(self, prior_fit_params):
         """
-        fit the real IQ response to a cosine
+        fit the real IQ response to a cocose
         """ 
 #         self.fits = dict()
 #         for qid in self.register:
 #             average_response = np.array([np.average(self.dataset[qid][qid][i]) for i in range(self.num_partitions)])
 #             self.fits[qid] = curve_fit(self._cos_function, self.amplitudes, average_response, prior_fit_params[qid]) 
     
-    def _fit_count_data(self, prior_fit_params):
+    def _fit_count_data(self, prior_fit_params, use_fft):
         """
         fit the count data to a cosine
         """
         self.fits = dict()
         for qid in self.register:
-            average_response = np.array([np.average(self.dataset[qid][i][qid]) for i in range(self.num_partitions)])
+            average_response = np.array([np.average(self.dataset[qid][qid][i]) for i in range(self.num_partitions)])
             try:
-                self.fits[qid] = curve_fit(self._sin, self.amplitudes, average_response, prior_fit_params[qid]) 
+                if use_fft:
+                    # this is "frequency" in terms of the rabi amplitude oscillation period
+                    freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
+                    freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.amplitudes)[0])[freq_ind_max]
+                    prior_fit_params[qid][2] = 1/freq_max
+                self.fits[qid] = curve_fit(self._cos, self.amplitudes, average_response, prior_fit_params[qid]) 
             except:
                 print(f'Could not fit {qid}')
 
@@ -209,19 +218,18 @@ class RabiAmpSweeper:
         # [0] fit the GMM's on the total raw data stream out of each readout line
         all_raw_data = {cid : np.array([]) for cid in self.readout_chanmap.values()}
         for qid in self.register:
-            for cidx in range(self.num_partitions):
-                for chan_id in self.raw_shots[qid][cidx].keys():
-                    all_raw_data[chan_id] = np.hstack((all_raw_data[chan_id], self.raw_shots[qid][cidx][chan_id][:, 0]))
+            for chan_id in self.raw_shots[qid].keys():
+                for cidx in range(self.num_partitions):
+                    all_raw_data[chan_id] = np.hstack((all_raw_data[chan_id], self.raw_shots[qid][chan_id][cidx][:, 0]))
         self.gmm_manager.fit(all_raw_data)
         # [1] relabel the GMM's based on the first (0 amplitude) circuit
         for qid in self.register:
-            self.gmm_manager.gmm_dict[qid].set_labels_maxtomin(self.raw_shots[qid][0][self.readout_chanmap[qid]], [0, 1])
+            self.gmm_manager.gmm_dict[qid].set_labels_maxtomin(self.raw_shots[qid][self.readout_chanmap[qid]][0], [0, 1])
            
         # [2] convert the raw shot data into a dataset using the trained GMM
         self.dataset = {qid : [] for qid in self.register}
         for qid in self.register:
-            for cidx in range(self.num_partitions):
-                self.dataset[qid].append(self.gmm_manager.predict(self.raw_shots[qid][cidx]))
+            self.dataset[qid] = self.gmm_manager.predict(self.raw_shots[qid])
         
         # dataset structure: 
 #         # {drive qubit}{readout qubit}[circuit index, shot index]
