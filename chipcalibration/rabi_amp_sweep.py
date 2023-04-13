@@ -246,3 +246,8 @@ class RabiAmpSweeper:
 #         self.state_disc_shots = self.gmm_manager.predict(self.raw_shots)
 #         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit],axis=1) for qubit in self.state_disc_shots.keys()}
 #         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0,axis=1) for qubit in self.state_disc_shots.keys()}
+    def update_qchip(self, qchip):
+        cal_drive_amps = {qid: self.fits[qid][0][2]/4 for qid in self.register} #1/4 the drive period for each qubit
+        for qid in self.register:
+            qchip.gates[qid + 'X90'].contents[0].amp = cal_drive_amps[qid]
+            qchip.gates[qid + 'X90'].contents[0].twidth = self.twidth
