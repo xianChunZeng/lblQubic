@@ -16,11 +16,12 @@ class Ramsey:
         """
         Create rabi circuits according to input parameters, then compile to asm binaries.
         """
-        self.circuits = self._make_ramsey_circuits(qubiits, delaytime, qchip)
+        self.circuits = self._make_ramsey_circuit(qubits, delaytime, qchip)
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubits}
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
         compiled_progs = tc.run_compile_stage(self.circuits, fpga_config, qchip)
         self.raw_asm_progs = tc.run_assemble_stage(compiled_progs, channel_configs)
+        self.qubits = qubits
         
     def _make_ramsey_circuit(self, qubits, delaytime, qchip):
         """
@@ -54,8 +55,10 @@ class Ramsey:
             circuit_runner : CircuitRunner object
             nsamples : int
         """
-        circuit_runner.load_circuit(self.raw_as_progs)
-        self.s11 = circuit_runner.run_circuit(nsample,len(delaytime), delay=400e-6*len(delaytime)*nsamples)
+        circuit_runner.load_circuit(self.raw_asm_progs)
+        #Total delay is sum of 500 us for every measurment and all the delays
+        
+        self.s11 = circuit_runner.run_circuit(nsamples,len(self.delaytime), delay_per_shot=(500.e-6*len(self.delaytime))+sum(self.delaytime))
 
     def _fit_gmm(self):
         self.gmm_manager.fit(self.s11)
@@ -64,10 +67,14 @@ class Ramsey:
         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=0) for qubit in self.state_disc_shots.keys()}
         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=0) for qubit in self.state_disc_shots.keys()}
 
+    def _cos_exp(self, x, A, B, drive_freq, phi,exp_decay):
+        return A*np.exp(-x/exp_decay)*np.cos(2*np.pi*x*drive_freq - phi) + B
+        
 
-    def fit_ramsey_freq(self):
-        pass
-                
-
+    def fit_ramsey_freq(self,prior_fit_params):
+        #cosine decaying exponentially with offset
+        self.param = {}
+        for qubit in self.qubits:
+            self.param[qubit] = curve_fit(self._cos_exp, self.delaytime, self.ones_frac[qubit], prior_fit_params[qubit])
         
 	

@@ -125,7 +125,7 @@ class RabiAmpSweeper:
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """
-        plot real IQ response vs drive amplitude for given target drive and sub_register
+        plot average count data vs drive amplitude
         """
         if sub_register is None:
             sub_register = [target_qid]
@@ -133,14 +133,16 @@ class RabiAmpSweeper:
 
         fig, axs = plt.subplots(len(sub_register), 1)
         avg_response = {qid : np.zeros(self.num_partitions) for qid in sub_register}
-        for cidx in range(self.num_partitions):
-            for qid in sub_register:
-                avg_response[qid][cidx] = np.average(self.dataset[target_qid][qid][cidx].flatten())
         
         if len(sub_register) == 1:
+            for cidx in range(self.num_partitions):
+                avg_response[target_qid][cidx] = np.average(self.dataset[target_qid][target_qid][cidx].flatten())
             axs.scatter(self.amplitudes, avg_response[sub_register[0]])
             axs.set_title(f'Counts on {target_qid} with drive on {target_qid}')
         else:
+            for cidx in range(self.num_partitions):
+                for qid in sub_register:
+                    avg_response[qid][cidx] = np.average(self.dataset[target_qid][qid][cidx].flatten())
             for idx, qid in enumerate(sub_register):
                 axs[idx].set_title(f'Counts on {qid} with drive on {target_qid}')
                 axs[idx].scatter(self.amplitudes, avg_response[qid])
@@ -176,7 +178,7 @@ class RabiAmpSweeper:
 
         if show_fits is True:
             if len(sub_register) == 1:          
-                axs.plot(self.amplitudes, self._cos_function(self.amplitudes, *self.fits[target_qid][0]), c='red')
+                axs.plot(self.amplitudes, self._cos(self.amplitudes, *self.fits[target_qid][0]), c='red')
             else:
                 axs[sub_register.index(target_qid)].plot(self.amplitudes, self._cos_function(self.amplitudes, *self.fits[target_qid][0]), c='red')
 
