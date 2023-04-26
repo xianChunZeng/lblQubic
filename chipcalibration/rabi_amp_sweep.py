@@ -189,7 +189,7 @@ class RabiAmpSweeper:
 
     def _fit_raw_data(self, prior_fit_params):
         """
-        fit the real IQ response to a cocose
+        fit the real IQ response to a cosine
         """ 
 #         self.fits = dict()
 #         for qid in self.register:
@@ -209,7 +209,7 @@ class RabiAmpSweeper:
                     freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
                     freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.amplitudes)[0])[freq_ind_max]
                     prior_fit_params[qid][2] = 1/freq_max
-                self.fits[qid] = curve_fit(self._cos, self.amplitudes, average_response, prior_fit_params[qid]) 
+                    self.fits[qid] = curve_fit(self._cos, self.amplitudes, average_response, prior_fit_params[qid]) 
             except:
                 print(f'Could not fit {qid}')
 
