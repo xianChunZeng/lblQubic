@@ -32,12 +32,12 @@ setuptools.setup(
 	extra_requires={
 		"numpy": ['numpy>1.20'],
 		"scipy": ['scipy>1.7'],
-		"sklearn": ['scipy>=0.0'],
+		"scikit-learn": ['scipy>=0.0'],
 		},
 	install_requires=[
         #"qubic",
 		"numpy",
 		"scipy",
-		"sklearn"
+		"scikit-learn"
 		],
 )
