@@ -1,5 +1,5 @@
 import qubitconfig.qchip as qc
-from qubic.rfsoc.hwconfig import load_channel_configs
+from qubic.rfsoc.hwconfig import load_channel_configs, FPGAConfig
 import os
 
 def load_configs(chipname, qchip_file='qubitcfg.json', channel_cfg_file='channel_config.json', qchip_dir='default'):

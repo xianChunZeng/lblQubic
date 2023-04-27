@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 import qubic.toolchain as tc
-import qubic.run as rc
 from qubic.state_disc import GMMManager
 
 ACC_BUFSIZE = 1000

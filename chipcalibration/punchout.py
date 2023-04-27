@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 import qubic.toolchain as tc
-import qubic.run as rc
 import pdb
 
 FBW = 6e6 
