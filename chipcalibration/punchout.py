@@ -101,7 +101,7 @@ class Punchout:
             assert qubits is not None
             qubit_dict = get_qubit_dict(qubits, qchip)
 
-        self.chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubit_dict.keys()}
+        self.chanmap = {qubit: str(channel_configs[qubit + '.rdlo'].core_ind) for qubit in qubit_dict.keys()}
         self.qubits = qubits
 
         freqoffs = np.linspace(-freq_bandwidth/2, freq_bandwidth/2, n_freq)
