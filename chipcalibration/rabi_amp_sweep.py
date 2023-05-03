@@ -40,7 +40,7 @@ class RabiAmpSweeper:
         self.qchip = qchip
         self.fpga_config = fpga_config
         self.channel_configs = channel_configs
-        self.readout_chanmap = {qid : channel_configs[qid + '.rdlo'].core_ind for qid in register}
+        self.readout_chanmap = {qid : str(channel_configs[qid + '.rdlo'].core_ind) for qid in register}
         self._assembled_circuits = dict()
         self.fits = None
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
@@ -108,7 +108,7 @@ class RabiAmpSweeper:
 
         #self._fit_gmm()
 
-    def _take_all_data(self, circuit_runner, num_samples):
+    def _take_all_data(self, job_manager, num_samples):
         """
         Take all the data needed to fit the rabi oscillations on the register
 
@@ -119,7 +119,7 @@ class RabiAmpSweeper:
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
             print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
-            self.raw_shots[drive_qid] = circuit_runner.run_circuit_batch(self._assembled_circuits[drive_qid], num_samples)
+            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self._assembled_circuits[drive_qid], num_samples)
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """
@@ -222,6 +222,7 @@ class RabiAmpSweeper:
             for chan_id in self.raw_shots[qid].keys():
                 for cidx in range(self.num_partitions):
                     all_raw_data[chan_id] = np.hstack((all_raw_data[chan_id], self.raw_shots[qid][chan_id][cidx][:, 0]))
+        self.all_raw_data = all_raw_data
         self.gmm_manager.fit(all_raw_data)
         # [1] relabel the GMM's based on the first (0 amplitude) circuit
         for qid in self.register:
