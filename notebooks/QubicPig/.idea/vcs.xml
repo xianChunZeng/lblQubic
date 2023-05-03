@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/distributed_processor" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/pygsti_qubic_demo/QubicCali2021a" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/pyrpe" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/qubitconfig" vcs="Git" />
+  </component>
+</project>
