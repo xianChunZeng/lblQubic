@@ -43,11 +43,11 @@ class Ramsey:
         for dtime in delaytime:
             for qubit in qubits:
                 drivefreq = qchip.gates[qubit + 'X90'].contents[0].fcarrier + freq_offs_dict[qubit]
+                circuit.append({'name': 'delay', 't': 400.e-6, 'qubit': [qubit]})
                 circuit.append({'name': 'X90', 'qubit': [qubit], 'modi':{(0, 'fcarrier'): drivefreq}})
                 circuit.append({'name': 'delay', 't': dtime, 'qubit':[qubit]})
                 circuit.append({'name': 'X90', 'qubit': [qubit], 'modi':{(0, 'fcarrier'): drivefreq}})
                 circuit.append({'name': 'read', 'qubit': [qubit]})
-                circuit.append({'name': 'delay', 't': 400.e-6, 'qubit': [qubit]})
 
         return circuit
         
@@ -99,7 +99,7 @@ class Ramsey:
                 freq_max = np.fft.rfftfreq(len(self.delaytime), np.diff(self.delaytime)[0])[freq_ind_max]
                 prior_fit_params[qubit][2] = freq_max
             try:
-                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime, self.ones_frac[qubit], prior_fit_params[qubit])
+                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime[1:], self.ones_frac[qubit][1:], prior_fit_params[qubit])
             except RuntimeError:
                 print('{} could not be fit')
 
