@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-
+import pdb
 from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 from qubic.state_disc import GMMManager
 import warnings
@@ -28,7 +28,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         run the time Rabi experiments and make a GMM Manager
         """
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-        self.raw_iq_shots = data
+        self.raw_iq_shots = data.copy()
         self.gmm_manager.fit(data)
         self.shots = self.gmm_manager.predict(data)
 
@@ -78,14 +78,13 @@ class TimeRabi(AbstractCalibrationExperiment):
     Time Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval, gmm_manager):
+    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval):
         if type(target_qubit) is not list:
             target_qubit = [target_qubit]
         if len(target_qubit) > 1:
             raise ValueError("TimeRabi can only target 1 qubit at a time")
         self.target_register = target_qubit
         self.readout_register = readout_register
-        self.gmm_manager = gmm_manager
         self.drive_amplitude = target_amplitude
 
         self.pulse_widths = pulse_width_interval
@@ -100,8 +99,7 @@ class TimeRabi(AbstractCalibrationExperiment):
 
         will also create a GMM Manager along the way
         """
-        data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-        self.shots = self.gmm_manager.predict(data)
+        self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
         fits = self._fit_data(self.shots, 'fft')
 
         if plotting:
@@ -131,14 +129,18 @@ class TimeRabi(AbstractCalibrationExperiment):
             prior_fit_params = [-0.5, 0.5, 1, 0]
 
         for qid in self.target_register:
-            average_response = np.array([np.average(self.shots[qid][qid][i]) for i in range(len(self.pulse_widths))])
-            if fit_routine == 'ff':
+            average_response = np.average(data[qid], axis=1)
+            if fit_routine == 'fft':
+                print('hey')
+                plt.plot(average_response)
                 try:
                         # this is "frequency" in terms of the rabi amplitude oscillation period
                         freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
                         freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.pulse_widths)[0])[freq_ind_max]
+                        pdb.set_trace()
                         prior_fit_params[qid][2] = 1 / freq_max
                         fits[qid] = curve_fit(self._cos, self.pulse_widths, average_response, prior_fit_params[qid])
+                        pdb.set_trace()
                 except:
                     print(f'Could not fit {qid}')
         return fits
@@ -167,4 +169,4 @@ class TimeRabi(AbstractCalibrationExperiment):
         runs the circuits using the jabmanager
         returns raw IQ shots
         """
-        return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
+        return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip)
