@@ -78,18 +78,14 @@ class TimeRabi(AbstractCalibrationExperiment):
     Time Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval, chanmap_or_channel_configs=None):
-        if chanmap_or_channel_configs is None:
-            warnings.warn("""This class does not have a chanmap_or_channelconfigs, and so cannot fit GMMManagers
-                          please set the chanmap with set_channel_info() before running""")
+    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval, gmm_manager):
         if type(target_qubit) is not list:
             target_qubit = [target_qubit]
         if len(target_qubit) > 1:
             raise ValueError("TimeRabi can only target 1 qubit at a time")
         self.target_register = target_qubit
         self.readout_register = readout_register
-        self.chanmap_or_channel_configs = chanmap_or_channel_configs
-        self.gmm_manager = None
+        self.gmm_manager = gmm_manager
         self.drive_amplitude = target_amplitude
 
         self.pulse_widths = pulse_width_interval
@@ -105,9 +101,8 @@ class TimeRabi(AbstractCalibrationExperiment):
         will also create a GMM Manager along the way
         """
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-        self.gmm_manager = self._fit_gmmm(data)
         self.shots = self.gmm_manager.predict(data)
-        fits = self._fit_data()
+        fits = self._fit_data(self.shots, 'fft')
 
         if plotting:
             fig, axs = plt.subplots(len(self.readout_register))
@@ -148,13 +143,6 @@ class TimeRabi(AbstractCalibrationExperiment):
                     print(f'Could not fit {qid}')
         return fits
 
-    def _fit_gmmm(self, data):
-        gmmm = GMMManager(chanmap_or_chan_cfgs=self.chanmap_or_channel_configs)
-        if data is not None:
-            gmmm.fit(data)
-        else:
-            raise ValueError("Must collect data before fitting a GMM Manager")
-        return gmmm
     def _make_circuits(self):
         """
         Make list of circuits used for rabi measurement. and the list of pulse width. So there will be a total of
