@@ -3,6 +3,7 @@ import numpy as np
 import qubic.toolchain as tc
 from qubic.state_disc import GMMManager
 from scipy.optimize import curve_fit
+from collections import OrderedDict
 
 ACC_BUFSIZE = 1000
 
@@ -46,10 +47,9 @@ class RabiAmpSweeper:
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
         
         self._set_amplitude_partitions(amp_range[0], amp_range[1], num_partitions) 
-        self.circuits = dict() # a batch of circuits for each target drive qubit
+        self.circuits = OrderedDict() # a batch of circuits for each target drive qubit
         for qid in register:
             self.circuits[qid] = self._make_rabi_circuits(qid)
-        self._compile_all_circuits()
 
     def _make_rabi_circuits(self, drvqubit):
         """
@@ -73,20 +73,7 @@ class RabiAmpSweeper:
         set the parition of amplitudes for corresponding rabi circuits
         """
         self.amplitudes = np.linspace(lower_bound, upper_bound, num_partitions)
-
-    def _compile_all_circuits(self):
-        """
-        compile the dictionary of circuits
-        """
-        for qid in self.register:
-            self._assembled_circuits[qid] = []
-            for circ in self.circuits[qid]: 
-                compiled_progs = tc.run_compile_stage([circ], self.fpga_config, self.qchip)[0]
-                try:
-                    raw_asm_progs = tc.run_assemble_stage(compiled_progs, self.channel_configs)
-                except:
-                    print("Could not compile", circ)
-                self._assembled_circuits[qid].append(raw_asm_progs)
+                
     
 
     def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True):
@@ -119,7 +106,7 @@ class RabiAmpSweeper:
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
             print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
-            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self._assembled_circuits[drive_qid], num_samples)
+            self.raw_shots[drive_qid] = job_manager.collect_raw_IQ(self.circuits[drive_qid], num_samples, self.qchip)
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """
