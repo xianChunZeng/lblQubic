@@ -30,6 +30,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
         self.raw_iq_shots = data.copy()
         self.gmm_manager.fit(data)
+        self.gmm_manager.set_labels_maxtomin(self.first_batch, [0, 1])
         self.shots = self.gmm_manager.predict(data)
 
         if plotting:
@@ -58,7 +59,10 @@ class GMMRabi(AbstractCalibrationExperiment):
             for twidth in self.pulse_widths:
                 cur_circ = []
                 cur_circ.append({'name': 'delay', 't': 400.e-6})
-                cur_circ.append({'name': 'rabi', 'qubit': [qid],
+                if twidth == 0: 
+                    pass
+                else: 
+                    cur_circ.append({'name': 'rabi', 'qubit': [qid],
                                  'modi': {(0, 'twidth'): twidth}, (0, 'amp'): self.drive_amplitude})
                 cur_circ.append({'name': 'barrier', 'qubit': self.target_register})
                 for qid_read in self.target_register:
@@ -71,6 +75,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         runs the circuits using the jabmanager
         returns raw IQ shots
         """
+        self.first_batch = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
         return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
 
 class TimeRabi(AbstractCalibrationExperiment):
@@ -93,26 +98,28 @@ class TimeRabi(AbstractCalibrationExperiment):
         self.optimization_parameters = ['X90.twidth', 'X90.amp']
         self.final_estimated_params = None
 
-    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip, plotting=True):
+    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip, plotting=True, fit_type='fft', period=None):
         """
         run the time Rabi experiment
 
         will also create a GMM Manager along the way
         """
         self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-        fits = self._fit_data(self.shots, 'fft')
-
+        fit = self._fit_data(self.shots[self.target_register[0]], fit_type, period)
+        self.fitted_rabi_period = fit[0][2]
+        
         if plotting:
             fig, axs = plt.subplots(len(self.readout_register))
             if len(self.readout_register) == 1:
                 axs = [axs]
             for idx, qid in enumerate(self.readout_register):
                 axs[idx].plot(self.pulse_widths, np.average(self.shots[qid], axis=1))
-                axs[idx].plot(self.pulse_widths, self._cos(self.pulse_widths, *fits[qid][0]), c='red')
+                if qid == self.target_register[0]:
+                    axs[idx].plot(self.pulse_widths, self._cos(self.pulse_widths, *fit[0]), c='red')
             plt.tight_layout()
             plt.show()
 
-        self.final_estimated_params = 1 # find the estimate based on the experiment type, the data, and the fit
+        self.final_estimated_params = [self.fitted_rabi_period/4, self.drive_amplitude] # find the estimate based on the experiment type, the data, and the fit
         return self.final_estimated_params
 
     def set_channel_info(self, chanmap_or_channel_configs):
@@ -120,30 +127,31 @@ class TimeRabi(AbstractCalibrationExperiment):
 
     def _cos(self, x, A, B, drive_period, phi):
         return A*np.cos(2*np.pi*x/drive_period - phi) + B
-    def _fit_data(self, data, fit_routine='fft', prior_fit_params=None):
+    
+    def _fit_data(self, data, fit_routine='fft', period=None):
         """
         fit the count data to a cosine
         """
-        fits = dict()
-        if prior_fit_params is None:
-            prior_fit_params = [-0.5, 0.5, 1, 0]
+        prior_fit_params = [-0.5, 0.5, period, 0]
 
-        for qid in self.target_register:
-            average_response = np.average(data[qid], axis=1)
-            if fit_routine == 'fft':
-                print('hey')
-                plt.plot(average_response)
-                try:
-                        # this is "frequency" in terms of the rabi amplitude oscillation period
-                        freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
-                        freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.pulse_widths)[0])[freq_ind_max]
-                        pdb.set_trace()
-                        prior_fit_params[qid][2] = 1 / freq_max
-                        fits[qid] = curve_fit(self._cos, self.pulse_widths, average_response, prior_fit_params[qid])
-                        pdb.set_trace()
-                except:
-                    print(f'Could not fit {qid}')
-        return fits
+        average_response = np.average(data, axis=1)
+        if fit_routine == 'fft':
+            try:
+                # this is "frequency" in terms of the rabi amplitude oscillation period
+                freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
+                freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.pulse_widths)[0])[freq_ind_max]
+                prior_fit_params[2] = 1 / freq_max
+                fit = curve_fit(self._cos, self.pulse_widths, average_response[:, 0], prior_fit_params)
+                return fit
+            except:
+                print('Could not fit with FFT, try again with a user defined period')
+        if fit_routine == 'period':
+            if period is None:
+                raise ValueError("Must supply a user defined period")
+            return curve_fit(self._cos, self.pulse_widths, average_response[:, 0], prior_fit_params)
+        
+                
+        
 
     def _make_circuits(self):
         """
@@ -155,7 +163,10 @@ class TimeRabi(AbstractCalibrationExperiment):
         for twidth in self.pulse_widths:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
-            cur_circ.append({'name': 'rabi', 'qubit': self.target_register,
+            if twidth == 0: 
+                pass
+            else: 
+                cur_circ.append({'name': 'rabi', 'qubit': [qid],
                              'modi': {(0, 'twidth'): twidth}, (0, 'amp'): self.drive_amplitude})
             cur_circ.append({'name': 'barrier', 'qubit': self.readout_register})
             for qid in self.readout_register:
