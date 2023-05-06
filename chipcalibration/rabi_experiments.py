@@ -10,9 +10,7 @@ class TimeRabi(AbstractCalibrationExperiment):
     Time Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, target_amplitude, time_interval=None, num_partitions=10, chanmap_or_channel_configs=None):
-        if time_interval is None:
-            time_interval = [0, 1]
+    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval, chanmap_or_channel_configs=None):
         if chanmap_or_channel_configs is None:
             warnings.warn("""This class does not have a chanmap_or_channelconfigs, and so cannot fit GMMManagers
                           please set the chanmap with set_channel_info() before running""")
@@ -23,8 +21,9 @@ class TimeRabi(AbstractCalibrationExperiment):
         self.target_register = target_qubit
         self.readout_register = readout_register
         self.chanmap_or_channel_configs = chanmap_or_channel_configs
+        self.gmm_manager = None
 
-        self.pulse_widths = np.linspace(time_interval[0], time_interval[1], num_partitions)
+        self.pulse_widths = pulse_width_interval
 
         self.circuits = self._make_circuits()
         self.optimization_parameters = ['X90.twidth', 'X90.amp']
@@ -45,7 +44,7 @@ class TimeRabi(AbstractCalibrationExperiment):
             if len(self.readout_register) == 1:
                 axs = [axs]
             for idx, qid in enumerate(self.readout_register):
-                axs[idx].plot(self.pulse_widths, np.average(self.shots, axis=1))
+                axs[idx].plot(self.pulse_widths, np.average(self.shots[qid], axis=1))
             plt.tight_layout()
             plt.show()
 
@@ -60,8 +59,8 @@ class TimeRabi(AbstractCalibrationExperiment):
     def _fit_data(self, data, fit_routine=None, prior_estimates=None):
         pass
 
-    def _fit_gmmm(self, data, chanmap_or_channel_configs):
-        gmmm = GMMManager(chanmap_or_channel_configs=self.chanmap_or_channel_configs)
+    def _fit_gmmm(self, data):
+        gmmm = GMMManager(chanmap_or_chan_cfgs=self.chanmap_or_channel_configs)
         if data is not None:
             gmmm.fit(data)
         else:
@@ -90,7 +89,4 @@ class TimeRabi(AbstractCalibrationExperiment):
         runs the circuits using the jabmanager
         returns raw IQ shots
         """
-        data = []
-        for i in range(self.num_repetitions):
-            data.append(jobmanager.collect_raw_IQ(self.circuits[i], num_shots_per_circuit, qchip))
-        return data
+        return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
