@@ -7,9 +7,6 @@ from abc import ABC
 from qubic.job_manager_jpm import JobManager
 from pygsti.circuits import Circuit
 from collections import OrderedDict
-
-
-
 class AbstractCalibrationExperiment(ABC):
     """
     Abstract calibration class
