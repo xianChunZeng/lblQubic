@@ -4,6 +4,8 @@ import numpy as np
 from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 from qubic.state_disc import GMMManager
 import warnings
+from scipy.optimize import curve_fit
+
 from collections import OrderedDict
 
 class GMMRabi(AbstractCalibrationExperiment):
@@ -105,6 +107,7 @@ class TimeRabi(AbstractCalibrationExperiment):
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
         self.gmm_manager = self._fit_gmmm(data)
         self.shots = self.gmm_manager.predict(data)
+        fits = self._fit_data()
 
         if plotting:
             fig, axs = plt.subplots(len(self.readout_register))
@@ -112,10 +115,9 @@ class TimeRabi(AbstractCalibrationExperiment):
                 axs = [axs]
             for idx, qid in enumerate(self.readout_register):
                 axs[idx].plot(self.pulse_widths, np.average(self.shots[qid], axis=1))
+                axs[idx].plot(self.pulse_widths, self._cos(self.pulse_widths, *fits[qid][0]), c='red')
             plt.tight_layout()
             plt.show()
-
-
 
         self.final_estimated_params = 1 # find the estimate based on the experiment type, the data, and the fit
         return self.final_estimated_params
@@ -123,8 +125,28 @@ class TimeRabi(AbstractCalibrationExperiment):
     def set_channel_info(self, chanmap_or_channel_configs):
         self.chanmap_or_channel_configs = chanmap_or_channel_configs
 
-    def _fit_data(self, data, fit_routine=None, prior_estimates=None):
-        pass
+    def _cos(self, x, A, B, drive_period, phi):
+        return A*np.cos(2*np.pi*x/drive_period - phi) + B
+    def _fit_data(self, data, fit_routine='fft', prior_fit_params=None):
+        """
+        fit the count data to a cosine
+        """
+        fits = dict()
+        if prior_fit_params is None:
+            prior_fit_params = [-0.5, 0.5, 1, 0]
+
+        for qid in self.target_register:
+            average_response = np.array([np.average(self.shots[qid][qid][i]) for i in range(len(self.pulse_widths))])
+            if fit_routine == 'ff':
+                try:
+                        # this is "frequency" in terms of the rabi amplitude oscillation period
+                        freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
+                        freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.pulse_widths)[0])[freq_ind_max]
+                        prior_fit_params[qid][2] = 1 / freq_max
+                        fits[qid] = curve_fit(self._cos, self.pulse_widths, average_response, prior_fit_params[qid])
+                except:
+                    print(f'Could not fit {qid}')
+        return fits
 
     def _fit_gmmm(self, data):
         gmmm = GMMManager(chanmap_or_chan_cfgs=self.chanmap_or_channel_configs)
