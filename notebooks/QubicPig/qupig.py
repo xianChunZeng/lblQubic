@@ -21,3 +21,13 @@ def parse_layer(layertup):
                                 layercirc.append({'name': gatename,
                                                   'qubit': list(layertup.qubits)})
         return layercirc
+
+def qubic_instructions_from_pygsti_circuit(pygsti_circuit, readout_register):
+        qubic_circuit = list()
+        qubic_circuit.append({'name': 'delay', 't': 400.e-6})
+        for layer in pygsti_circuit:
+            qubic_circuit.extend(parse_layer(layer))
+            qubic_circuit.append({'name': 'barrier', 'qubit': readout_register})
+        for qid in readout_register:
+            qubic_circuit.append({'name': 'read', 'qubit': [qid]}, )
+        return qubic_circuit
