@@ -118,7 +118,6 @@ class TimeRabi(AbstractCalibrationExperiment):
                     axs[idx].plot(self.pulse_widths, self._cos(self.pulse_widths, *fit[0]), c='red')
             plt.tight_layout()
             plt.show()
-
         self.final_estimated_params = [self.fitted_rabi_period/4, self.drive_amplitude] # find the estimate based on the experiment type, the data, and the fit
         return self.final_estimated_params
 

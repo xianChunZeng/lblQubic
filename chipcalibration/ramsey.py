@@ -82,7 +82,7 @@ class Ramsey:
             pass
 
 
-    def _cos_exp(self, x, A, B, drive_freq, phi,exp_decay):
+    def _cos_exp(self, x, A, B, drive_freq, phi, exp_decay):
         return A*np.exp(-x/exp_decay)*np.cos(2*np.pi*x*drive_freq - phi) + B
         
 

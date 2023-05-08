@@ -53,6 +53,9 @@ class AbstractCalibrationExperiment(ABC):
         """
         run the experiment
 
+        TODO: this function should really be split into to, and only have the body
+        self.run(jobmanager, num_shots_per_circuit, qchip)
+        return self.report()
         """
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
         fit = self._fit_data(data)
