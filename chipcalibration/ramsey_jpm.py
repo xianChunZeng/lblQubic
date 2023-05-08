@@ -22,6 +22,7 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         self.initial_drive_frequency = drive_frequency
         self.prior_fit_params = [720, 500, 500e3, 0,1.5e-5]
 
+
         self.optimization_parameters = ['Qid.freq']
         self.estimated_qubit_frequency = None
 
@@ -74,7 +75,7 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         print(f'Final estimated qubit frequency {self.estimated_qubit_frequency}')
         return self.estimated_qubit_frequency
     
-    def update_qchip(qchip):
+    def update_qchip(self, qchip):
         if self.estimated_qubit_frequency is None:
             raise ValueError('Please run Ramsey experiment before updating the qchip')
         qchip.qubits[qubit].freq = self.estimated_qubit_frequency
