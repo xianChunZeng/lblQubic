@@ -20,6 +20,8 @@ class Ramsey:
         self.qubits = qubits
         self.circuits = self._make_ramsey_circuit(qubits, delaytime, qchip, freq_offs_dict)
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubits}
+        
+        
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
         compiled_progs = tc.run_compile_stage(self.circuits, fpga_config, qchip)
         self.raw_asm_progs = tc.run_assemble_stage(compiled_progs, channel_configs)
@@ -99,7 +101,7 @@ class Ramsey:
                 freq_max = np.fft.rfftfreq(len(self.delaytime), np.diff(self.delaytime)[0])[freq_ind_max]
                 prior_fit_params[qubit][2] = freq_max
             try:
-                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime[1:], self.ones_frac[qubit][1:], prior_fit_params[qubit])
+                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime[1:], self.ones_frac[qubit][1:])
             except RuntimeError:
                 print('{} could not be fit')
 
