@@ -50,7 +50,7 @@ class RpeX90:
         
     def simulate_target(self, num_samples):
         """
-        Simulate the pygsti circuits at the target model in infinite shot limit
+        Simulate the pygsti circuits at the target model
         :return:
         """
         target_ds = pygsti.data.simulate_data(self.chip.target_model, self.all_circuits_needing_data,
