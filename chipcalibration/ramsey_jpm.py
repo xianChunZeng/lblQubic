@@ -19,7 +19,6 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         self.delay_interval = delay_interval
         self.initial_drive_frequency = drive_frequency
 
-
         self.optimization_parameters = ['Qid.freq']
         self.estimated_drive_frequency = None
 
