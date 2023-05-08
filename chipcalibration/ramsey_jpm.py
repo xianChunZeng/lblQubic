@@ -78,7 +78,7 @@ class RamseyExperiment(AbstractCalibrationExperiment):
     def update_qchip(self, qchip):
         if self.estimated_qubit_frequency is None:
             raise ValueError('Please run Ramsey experiment before updating the qchip')
-        qchip.qubits[qubit].freq = self.estimated_qubit_frequency
+        qchip.qubits[self.target_register[0]].freq = self.estimated_qubit_frequency
 
     @staticmethod
     def _cos_exp(x, scale, offset, drive_freq, phi, exp_decay):
