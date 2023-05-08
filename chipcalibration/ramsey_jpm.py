@@ -5,6 +5,8 @@ from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 from qubic.state_disc import GMMManager
 import warnings
 from scipy.optimize import curve_fit
+import copy
+
 
 from collections import OrderedDict
 
@@ -18,22 +20,31 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         self.readout_register = readout_register
         self.delay_interval = delay_interval
         self.initial_drive_frequency = drive_frequency
+        self.prior_fit_params = [720, 500, 500e3, 0,1.5e-5]
 
 
         self.optimization_parameters = ['Qid.freq']
-        self.estimated_drive_frequency = None
+        self.estimated_qubit_frequency = None
 
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
         initial_shots = self.run_ramsey(self.initial_drive_frequency, self.delay_interval, jobmanager, num_shots_per_circuit, qchip)
+        self.initial_shots = initial_shots
         try:
             fit = self._fit_data(initial_shots)
-        except:
+        except RuntimeError:
             print("Could not fit the initial reading")
+            
+         
+        plt.plot(self.delay_interval, np.average(initial_shots[self.target_register[0]], axis=1))
+        plt.plot(self.delay_interval, self._cos_exp(self.delay_interval, *fit[0]))
+        plt.title("Initial Reading and Fit")
+        plt.figure()
+        plt.show()
+        
+        estimated_frequency_differential = fit[0][2]
 
-        estimated_frequency_differential = fit[1]
-
-        pos_shots = self.run_ramsey(self.initial_drive_frequency+estimated_frequency_differential, num_shots_per_circuit, qchip)
-        neg_shots = self.run_ramsey(self.initial_drive_frequency-estimated_frequency_differential, num_shots_per_circuit, qchip)
+        pos_shots = self.run_ramsey(self.initial_drive_frequency+estimated_frequency_differential, self.delay_interval, jobmanager, num_shots_per_circuit, qchip)
+        neg_shots = self.run_ramsey(self.initial_drive_frequency-estimated_frequency_differential, self.delay_interval, jobmanager, num_shots_per_circuit, qchip)
 
         try:
             pos_fit = self._fit_data(pos_shots)
@@ -44,16 +55,30 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         pos_probs = np.average(pos_shots[self.target_register[0]], axis=1)
         neg_probs = np.average(neg_shots[self.target_register[0]], axis=1)
         plt.plot(self.delay_interval, pos_probs)
+        plt.title("+1 Offset")
         plt.figure()
         plt.plot(self.delay_interval, neg_probs)
-
-        pos_or_neg = input("Was the differential pos or neg? Please input +1 or -1")
-        if pos_or_neg == +1:
-            self.estimated_drive_frequency = self.initial_drive_frequency+estimated_frequency_differential
-        elif pos_or_neg == -1:
-            self.estimated_drive_frequency = self.initial_drive_frequency-estimated_frequency_differential
-
-        return self.estimated_drive_frequency
+        plt.title("-1 Offset")
+        plt.figure()
+        plt.show()
+        while True:
+            pos_or_neg = int(input("Was the differential pos or neg? Please input +1 or -1\n"))
+            if pos_or_neg == +1:
+                self.estimated_qubit_frequency = self.initial_drive_frequency+estimated_frequency_differential
+                break
+            elif pos_or_neg == -1:
+                self.estimated_qubit_frequency = self.initial_drive_frequency-estimated_frequency_differential
+                break
+            else:
+                print("Please input +1 or -1")
+                
+        print(f'Final estimated qubit frequency {self.estimated_qubit_frequency}')
+        return self.estimated_qubit_frequency
+    
+    def update_qchip(qchip):
+        if self.estimated_qubit_frequency is None:
+            raise ValueError('Please run Ramsey experiment before updating the qchip')
+        qchip.qubits[qubit].freq = self.estimated_qubit_frequency
 
     @staticmethod
     def _cos_exp(x, scale, offset, drive_freq, phi, exp_decay):
@@ -61,27 +86,28 @@ class RamseyExperiment(AbstractCalibrationExperiment):
 
     def run_ramsey(self, drive_frequency, delay_interval, jobmanager, num_shots_per_circuit, qchip):
         circuits = self.ramsey_circuits(drive_frequency, delay_interval)
-        return jobmanager.collect_classified_shots(circuits, num_shots_per_circuit, qchip,
-                                                    reads_per_shot=len(self.delay_interval),
-                                                    delay_per_shot=(500.e-6*len(self.delay_interval))+sum(self.delay_interval) )
+        return jobmanager.collect_classified_shots(circuits, num_shots_per_circuit, qchip)
 
-    def _fit_data(self, observed_probabilities, fit_routine=None, prior_estimates=None):
+    def _fit_data(self, shot_data, fit_routine='fft', prior_estimates=None):
         """
         cosine decaying exponentially with offset
         params are [A, B, drive_freq, phi, exp_decay]
         """
         self.fit_params = {}
-        prior_fit_params = copy.deepcopy(prior_fit_params)
-        for qubit in self.qubits:
-            if use_fft:
-                freq_ind_max = np.argmax(np.abs(np.fft.rfft(self.ones_frac[qubit])[1:])) + 1
-                freq_max = np.fft.rfftfreq(len(self.delaytime), np.diff(self.delaytime)[0])[freq_ind_max]
-                prior_fit_params[qubit][2] = freq_max
-            try:
-                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime[1:], self.ones_frac[qubit][1:],
-                                                   prior_fit_params[qubit])
-            except RuntimeError:
-                print('{} could not be fit')
+        prior_fit_params = copy.deepcopy(prior_estimates)
+        observed_probabilities = np.average(shot_data[self.target_register[0]], axis=1)
+        qid = self.target_register[0]
+        if fit_routine == 'fft':
+            freq_ind_max = np.argmax(np.abs(np.fft.rfft(observed_probabilities))) + 1
+            freq_max = np.fft.rfftfreq(len(self.delay_interval), np.diff(self.delay_interval)[0])[freq_ind_max]
+            self.prior_fit_params[2] = freq_max
+        try:
+            fit = curve_fit(self._cos_exp, self.delay_interval[1:], observed_probabilities[1:].flatten(),
+                                               self.prior_fit_params)
+        except RuntimeError:
+            fit = None
+            print('{} could not be fit')
+        return fit
 
     def ramsey_circuits(self, drive_freq, delay_interval):
         circuits = []
