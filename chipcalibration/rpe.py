@@ -58,7 +58,7 @@ class RpeX90:
         return pygsti.circuits.Circuit([[('Gxpi2', self.qid)]])*power
 
     def make_sin_circuit(self, power: int):
-        return pygsti.circuits.Circuit([[('Gxpi2', self.qid)]])*power+ pygsti.circuits.Circuit(
+        return pygsti.circuits.Circuit([[('Gxpi2', self.qid)]])*power + pygsti.circuits.Circuit(
             [[('Gxpi2', self.qid)]])
 
     def _make_pygsti_circuits(self):
