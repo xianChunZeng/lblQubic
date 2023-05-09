@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 import qubic.toolchain as tc
-import qubic.run as rc
 from qubic.state_disc import GMMManager
 
 ACC_BUFSIZE = 1000
@@ -56,19 +54,6 @@ class Rcal:
             nsamples : int
         """
         reads_per_shot = 1 
-        #nshot = min(ACC_BUFSIZE//reads_per_shot,nsamples)
-        #navg = int(np.ceil(nsamples/nshot))
-        #self.s11 = {chan: np.zeros((len(self.pulse_widths), nshot*navg), dtype=np.complex128)
-        #            for chan in self.readout_chanmap.values()}
-        #print((len(self.pulse_widths), nshot*navg))        
-        #print('nshot',nshot,'navg',navg)        
-
-        #for i, raw_asm in enumerate(self.raw_asm_progs):
-        #    print(i)
-        #    circuit_runner.load_circuit(raw_asm)
-        #    shots = circuit_runner.run_circuit(nshot, navg, reads_per_shot, delay=0.5)
-        #    for chan, iqdata in shots.items():
-        #        self.s11[chan][i] = iqdata #np.reshape(iqdata, (nshot*navg, len(self.pulse_widths))).T
         self.s11 = circuit_runner.run_circuit_batch(self.raw_asm_progs, nsamples, 1, delay_per_shot=500.e-6)
         self._fit_gmm()
 
