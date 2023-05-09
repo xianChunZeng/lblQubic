@@ -75,8 +75,8 @@ class GMMRabi(AbstractCalibrationExperiment):
         runs the circuits using the jabmanager
         returns raw IQ shots
         """
-        self.first_batch = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
-        return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip)
+        self.first_batch = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
+        return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
 
 class TimeRabi(AbstractCalibrationExperiment):
     """
@@ -179,4 +179,4 @@ class TimeRabi(AbstractCalibrationExperiment):
         runs the circuits using the jabmanager
         returns raw IQ shots
         """
-        return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip)
+        return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)

@@ -30,28 +30,62 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
 
         # tomographic curves of the target qubit for analysis and plotting
-        # stored in the format: [twidth_idx, amp_idx, tomo_axis_idx, shot_idx]
+        # stored in the format: [tomo_axis_idx, twidth_idx, amp_idx]
         tomographic_curves = np.zeros(
-            (len(self.pulse_width_interval), len(self.drive_amp_interval), 6, num_shots_per_circuit))
+            (6, len(self.pulse_width_interval), len(self.drive_amp_interval)))
         for index_pair in data.keys():
             for id_axis in range(6):
-                tomographic_curves[index_pair[0], index_pair[1], id_axis, :] = \
-                    2 * np.average(data[index_pair][self.target_qid], axis=1) - 1
+                tomographic_curves[id_axis, index_pair[0], index_pair[1]] = \
+                    2 * np.average(data[index_pair][self.target_qid], axis=1)[id_axis] - 1
 
         # fit = self._fit_data(data)
 
-        assert len(self.drive_amp_interval) != 1, "must be a non-trivial drive interval"
+        assert len(self.pulse_width_interval) != 1, "must be a non-trivial drive interval"
         if len(self.drive_amp_interval) == 1:
             amp = self.drive_amp_interval[0]
             fig, axs = plt.subplots(4)
-            for id_t, twidth in enumerate(self.pulse_width_interval):
-                axs[0].plot(tomographic_curves[id_t, 0, 0, :], label='X0')
-                axs[0].plot(tomographic_curves[id_t, 0, 3, :], label='X1')
-                axs[1].plot(tomographic_curves[id_t, 0, 1, :], label='Y0')
-                axs[1].plot(tomographic_curves[id_t, 0, 4, :], label='Y1')
-                axs[2].plot(tomographic_curves[id_t, 0, 2, :], label='Z0')
-                axs[2].plot(tomographic_curves[id_t, 0, 5, :], label='Z1')
-                axs[3].plot(self.trace_difference(tomographic_curves[id_t, 0, :, :]))
+            axs[0].plot(tomographic_curves[0, :, 0], label='X0')
+            axs[0].plot(tomographic_curves[3, :, 0], label='X1')
+            axs[1].plot(tomographic_curves[1, :, 0], label='Y0')
+            axs[1].plot(tomographic_curves[4, :, 0], label='Y1')
+            axs[2].plot(tomographic_curves[2, :, 0], label='Z0')
+            axs[2].plot(tomographic_curves[5, :, 0], label='Z1')
+            axs[3].plot(self.trace_difference(tomographic_curves))
+        else: # plot a 2d color grid
+            X, Y = np.meshgrid(self.pulse_width_interval, self.drive_amp_interval, indexing='ij')
+            fig, axs = plt.subplots(3)
+            cmX0 = axs[0].pcolormesh(X, Y, tomographic_curves[0, :, :], label='X0', cmap='Blues', alpha=0.5)
+            cmX1 = axs[0].pcolormesh(X, Y, tomographic_curves[3, :, :], label='X1', cmap='Reds', alpha=0.5)
+            cmY0 = axs[1].pcolormesh(X, Y, tomographic_curves[1, :, :], label='Y0', cmap='Blues', alpha=0.5)
+            cmY1 = axs[1].pcolormesh(X, Y, tomographic_curves[4, :, :], label='Y1', cmap='Reds', alpha=0.5)
+            cmZ0 = axs[2].pcolormesh(X, Y, tomographic_curves[2, :, :], label='Z0', cmap='Blues', alpha=0.5)
+            cmZ1 = axs[2].pcolormesh(X, Y, tomographic_curves[5, :, :], label='Z1', cmap='Reds', alpha=0.5)
+            
+            fig.colorbar(cmX0, ax=axs[0])
+            fig.colorbar(cmX1, ax=axs[0])
+            fig.colorbar(cmY0, ax=axs[1])
+            fig.colorbar(cmY1, ax=axs[1])
+            fig.colorbar(cmZ0, ax=axs[2])
+            fig.colorbar(cmZ1, ax=axs[2])
+            for i in range(3):
+                axs[i].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[1]])
+            axs[0].set_title('X0 (blue) and X1 (red) response')
+            axs[1].set_title('Y0 (blue) and Y1 (red) response')
+            axs[2].set_title('Z0 (blue) and Z1 (red) response')
+            plt.tight_layout()
+                
+                
+            plt.show()
+            
+            fig, axs = plt.subplots()
+            cmTD = axs.pcolormesh(X, Y, self.trace_difference(tomographic_curves), cmap='Greens')
+            fig.colorbar(cmTD, ax=axs)
+            axs.set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[1]])
+            axs.set_ylabel('drive amp')
+            axs.set_xlabel('pulse width')
+            axs.set_title('trace distance between target tomography states')
+            plt.show()
+            
 
         # plt.plot(fit)
         # make report and save
@@ -66,18 +100,18 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
         """
         returns the r-value curve given the two tomographic curves
         """
-        return 0.5 * np.sqrt((tomo_arr[3, :] - tomo_arr[0, :]) ** 2 +
-                             (tomo_arr[4, :] - tomo_arr[1, :]) ** 2 +
-                             (tomo_arr[5, :] - tomo_arr[2, :]) ** 2
+        return 0.5 * np.sqrt((tomo_arr[3, :, :] - tomo_arr[0, :, :]) ** 2 +
+                             (tomo_arr[4, :, :] - tomo_arr[1, :, :]) ** 2 +
+                             (tomo_arr[5, :, :] - tomo_arr[2, :, :]) ** 2
                              )
 
     def trace_difference(self, tomo_arr):
         """
         Calculate the trace difference between the two target qubit states
         """
-        return 0.5 * (abs(tomo_arr[3, :] - tomo_arr[0, :]) +
-                      abs(tomo_arr[4, :] - tomo_arr[1, :]) +
-                      abs(tomo_arr[5, :] - tomo_arr[2, :])
+        return 0.5 * (abs(tomo_arr[3, :, :] - tomo_arr[0, :, :]) +
+                      abs(tomo_arr[4, :, :] - tomo_arr[1, :, :]) +
+                      abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
                       )
 
     def _make_circuits(self):
@@ -99,18 +133,19 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                 amp_time_circuit_list = []  # experiments for a fixed time and amplitude
                 for control_state in [0, 1]:
                     for axis in ['X', 'Y', 'Z']:
-                        circ = [{'name': 'delay', 't': 400.e-6, 'qubit': self.readout_register}]
+                        circ = [{'name': 'delay', 't': 400.e-6}]
                         if control_state == 1:
                             circ.append({'name': 'X90', 'qubit': [self.control_qid]})
                             circ.append({'name': 'X90', 'qubit': [self.control_qid]})
                         circ.append({'name': 'CR', 'qubit': [self.control_qid, self.target_qid],
                                      'mode': {(0, 'twidth'): twidth, (0, 'amp'): amp}})
                         if axis == 'X':
-                            circ.append({'name': '-Y90', 'qubit': [self.target_qid]})
+                            circ.append({'name': 'Y-90', 'qubit': [self.target_qid]})
                         elif axis == 'Y':
                             circ.append({'name': 'X90', 'qubit': [self.target_qid]})
-                        circ.append({'name': 'barrier', 'qubit': [self.readout_register]})
-                        circ.append({'name': 'read', 'qubit': [self.readout_register]})
+                        circ.append({'name': 'barrier', 'qubit': self.readout_register})
+                        for qid in self.readout_register:
+                            circ.append({'name': 'read', 'qubit': [qid]})
                         amp_time_circuit_list.append(circ)
                 circuits[(id_twidth, id_amp)] = amp_time_circuit_list
         return circuits
