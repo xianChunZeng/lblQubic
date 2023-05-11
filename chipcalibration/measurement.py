@@ -31,7 +31,7 @@ class MeasurementCalibration(AbstractCalibrationExperiment):
         self.optimization_parameters = ['MEAS.amp', 'MEAS.freq']
         self.final_estimated_params = None
 
-    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
+    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip, center_amp=None, center_freq=None):
         """
         run the experiment
 
@@ -41,7 +41,15 @@ class MeasurementCalibration(AbstractCalibrationExperiment):
         separations, gmmms = self._fit_data(data)
         self.fitted_gmmms = gmmms
         self.separations = separations
-        plt.pcolormesh(self.amp_interval, self.freq_interval, separations.T)
+        colormesh = plt.pcolormesh(self.amp_interval, self.freq_interval, separations.T, cmap='cividis')
+        plt.colorbar(colormesh)
+        if center_amp is not None and center_freq is not None:
+            plt.scatter(center_amp, center_freq, marker='X', s=400, c='red')
+        plt.title("Sigma separation as a function of amp and freq")
+        plt.xlabel("amp")
+        plt.ylabel("freq")
+        plt.xlim([self.amp_interval[0], self.amp_interval[-1]])
+        plt.ylim([self.freq_interval[0], self.freq_interval[-1]])
         plt.show()
 
 
@@ -61,7 +69,7 @@ class MeasurementCalibration(AbstractCalibrationExperiment):
                 gmm_manager = GMMManager(chanmap_or_chan_cfgs=self.channel_config)
                 gmm_manager.fit(data[(id_amp, id_freq)])
                 gmmms[(id_amp, id_freq)] = gmm_manager
-                separations[(id_amp, id_freq)] = self.sigma_separation(gmm_manager.gmm_dict[self.target_register[0]])
+                separations[(id_amp, id_freq)] = self.sigma_separation(gmm_manager.gmm_dict[self.target_register[0]].gmmfit)
         return separations, gmmms
 
 
@@ -96,7 +104,11 @@ class MeasurementCalibration(AbstractCalibrationExperiment):
         the GMMM and the FPGA/Channel configs and the qchip is managed
         """
         data = OrderedDict()
+        amp_range = range(len(self.amp_interval))
+        freq_range = range(len(self.freq_interval))
+        
         for id_amp, amp, in enumerate(self.amp_interval):
             for id_freq, freq in enumerate(self.freq_interval):
-                data[(id_amp, id_freq)] = jobmanager.collect_raw_IQ(self.circuits[(id_amp, id_freq)], num_shots_per_circuit, qchip=qchip)
+                # TODO: convert to a single batch using np.ravel or some such
+                data[(id_amp, id_freq)] = jobmanager.collect_raw_IQ([self.circuits[(id_amp, id_freq)]], num_shots_per_circuit, qchip=qchip)
         return data

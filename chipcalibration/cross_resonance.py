@@ -28,29 +28,56 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
         run the experiment and report
         """
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-
+        self.data = data
         # tomographic curves of the target qubit for analysis and plotting
         # stored in the format: [tomo_axis_idx, twidth_idx, amp_idx]
         tomographic_curves = np.zeros(
             (6, len(self.pulse_width_interval), len(self.drive_amp_interval)))
         for index_pair in data.keys():
-            for id_axis in range(6):
-                tomographic_curves[id_axis, index_pair[0], index_pair[1]] = \
-                    2 * np.average(data[index_pair][self.target_qid], axis=1)[id_axis] - 1
+            tomographic_curves[:, index_pair[0], index_pair[1]] = \
+                2 * np.average(data[index_pair][self.target_qid], axis=1)[:, 0] - 1
+        self.tomographic_curves = tomographic_curves
 
         # fit = self._fit_data(data)
 
-        assert len(self.pulse_width_interval) != 1, "must be a non-trivial drive interval"
         if len(self.drive_amp_interval) == 1:
             amp = self.drive_amp_interval[0]
             fig, axs = plt.subplots(4)
-            axs[0].plot(tomographic_curves[0, :, 0], label='X0')
-            axs[0].plot(tomographic_curves[3, :, 0], label='X1')
-            axs[1].plot(tomographic_curves[1, :, 0], label='Y0')
-            axs[1].plot(tomographic_curves[4, :, 0], label='Y1')
-            axs[2].plot(tomographic_curves[2, :, 0], label='Z0')
-            axs[2].plot(tomographic_curves[5, :, 0], label='Z1')
-            axs[3].plot(self.trace_difference(tomographic_curves))
+            axs[0].plot(self.pulse_width_interval, tomographic_curves[0, :, 0], label='X0')
+            axs[0].plot(self.pulse_width_interval, tomographic_curves[3, :, 0], label='X1')
+            axs[1].plot(self.pulse_width_interval, tomographic_curves[1, :, 0], label='Y0')
+            axs[1].plot(self.pulse_width_interval, tomographic_curves[4, :, 0], label='Y1')
+            axs[2].plot(self.pulse_width_interval, tomographic_curves[2, :, 0], label='Z0')
+            axs[2].plot(self.pulse_width_interval, tomographic_curves[5, :, 0], label='Z1')
+            axs[0].set_title('X0 and X1 response')
+            axs[1].set_title('Y0 and Y1 response')
+            axs[2].set_title('Z0 and Z1 response')
+            td = axs[3].plot(self.pulse_width_interval, self.trace_difference(tomographic_curves), label='td')
+            rdiff = axs[3].plot(self.pulse_width_interval, self.r_diff(tomographic_curves), label='rdiff')
+            axs[3].set_xlabel('pulse width')
+            
+            for i in range(4):
+                axs[i].legend()
+            plt.tight_layout()
+            
+        elif len(self.pulse_width_interval) == 1:
+            twidth = self.pulse_width_interval[0]
+            fig, axs = plt.subplots(4)
+            axs[0].plot(self.drive_amp_interval, tomographic_curves[0, 0, :], label='X0')
+            axs[0].plot(self.drive_amp_interval, tomographic_curves[3, 0, :], label='X1')
+            axs[1].plot(self.drive_amp_interval, tomographic_curves[1, 0, :], label='Y0')
+            axs[1].plot(self.drive_amp_interval, tomographic_curves[4, 0, :], label='Y1')
+            axs[2].plot(self.drive_amp_interval, tomographic_curves[2, 0, :], label='Z0')
+            axs[2].plot(self.drive_amp_interval, tomographic_curves[5, 0, :], label='Z1')
+            td = axs[3].plot(self.drive_amp_interval, self.trace_difference(tomographic_curves)[0, :], label='td')
+            rdiff = axs[3].plot(self.drive_amp_interval, self.r_diff(tomographic_curves)[0, :], label='rdiff')
+            axs[3].set_xlabel('drive amp')
+            axs[0].set_title('X0 and X1 response')
+            axs[1].set_title('Y0 and Y1 response')
+            axs[2].set_title('Z0 and Z1 response')
+            for i in range(4):
+                axs[i].legend()
+            plt.tight_layout()
         else: # plot a 2d color grid
             X, Y = np.meshgrid(self.pulse_width_interval, self.drive_amp_interval, indexing='ij')
             fig, axs = plt.subplots(3)
@@ -68,7 +95,7 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
             fig.colorbar(cmZ0, ax=axs[2])
             fig.colorbar(cmZ1, ax=axs[2])
             for i in range(3):
-                axs[i].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[1]])
+                axs[i].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[-1]])
             axs[0].set_title('X0 (blue) and X1 (red) response')
             axs[1].set_title('Y0 (blue) and Y1 (red) response')
             axs[2].set_title('Z0 (blue) and Z1 (red) response')
@@ -77,13 +104,20 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                 
             plt.show()
             
-            fig, axs = plt.subplots()
-            cmTD = axs.pcolormesh(X, Y, self.trace_difference(tomographic_curves), cmap='Greens')
-            fig.colorbar(cmTD, ax=axs)
-            axs.set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[1]])
-            axs.set_ylabel('drive amp')
-            axs.set_xlabel('pulse width')
-            axs.set_title('trace distance between target tomography states')
+            fig, axs = plt.subplots(2)
+            cmTD = axs[0].pcolormesh(X, Y, self.trace_difference(tomographic_curves), cmap='Greens')
+            axs[0].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[-1]])
+            axs[0].set_ylabel('drive amp')
+            axs[0].set_xlabel('pulse width')
+            axs[0].set_title('trace distance between target tomography states')
+            cmRD = axs[1].pcolormesh(X, Y, self.r_diff(tomographic_curves), cmap='Greens')
+            axs[1].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[-1]])
+            axs[1].set_ylabel('drive amp')
+            axs[1].set_xlabel('pulse width')
+            axs[1].set_title('r-distance between target tomography states')
+            fig.colorbar(cmTD, ax=axs[0])
+            fig.colorbar(cmRD, ax=axs[1])
+            plt.tight_layout()
             plt.show()
             
 
@@ -96,7 +130,8 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
     def _fit_data(self, data, fit_routine=None, prior_estimates=None):
         pass
 
-    def r_curve(self, tomo_arr):
+    @staticmethod
+    def r_diff(tomo_arr):
         """
         returns the r-value curve given the two tomographic curves
         """
@@ -104,8 +139,9 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                              (tomo_arr[4, :, :] - tomo_arr[1, :, :]) ** 2 +
                              (tomo_arr[5, :, :] - tomo_arr[2, :, :]) ** 2
                              )
-
-    def trace_difference(self, tomo_arr):
+    
+    @staticmethod
+    def trace_difference(tomo_arr):
         """
         Calculate the trace difference between the two target qubit states
         """
@@ -113,7 +149,9 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                       abs(tomo_arr[4, :, :] - tomo_arr[1, :, :]) +
                       abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
                       )
-
+    
+    
+    
     def _make_circuits(self):
         """
         makes and returns the circuits
@@ -138,7 +176,7 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                             circ.append({'name': 'X90', 'qubit': [self.control_qid]})
                             circ.append({'name': 'X90', 'qubit': [self.control_qid]})
                         circ.append({'name': 'CR', 'qubit': [self.control_qid, self.target_qid],
-                                     'mode': {(0, 'twidth'): twidth, (0, 'amp'): amp}})
+                                     'modi': {(0, 'twidth'): twidth, (0, 'amp'): amp}})
                         if axis == 'X':
                             circ.append({'name': 'Y-90', 'qubit': [self.target_qid]})
                         elif axis == 'Y':

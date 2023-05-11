@@ -55,19 +55,22 @@ class RamseyExperiment(AbstractCalibrationExperiment):
         pos_probs = np.average(pos_shots[self.target_register[0]], axis=1)
         neg_probs = np.average(neg_shots[self.target_register[0]], axis=1)
         plt.plot(self.delay_interval, pos_probs)
-        plt.title("+1 Offset")
+        plt.title(f"+{estimated_frequency_differential} Offset")
         plt.figure()
         plt.plot(self.delay_interval, neg_probs)
-        plt.title("-1 Offset")
+        plt.title(f"-{estimated_frequency_differential} Offset")
         plt.figure()
         plt.show()
         while True:
-            pos_or_neg = int(input("Was the differential pos or neg? Please input +1 or -1\n"))
+            pos_or_neg = int(input("Was the differential pos or neg? Please input +1 or -1 or 0 for no change\n"))
             if pos_or_neg == +1:
                 self.estimated_qubit_frequency = self.initial_drive_frequency+estimated_frequency_differential
                 break
             elif pos_or_neg == -1:
                 self.estimated_qubit_frequency = self.initial_drive_frequency-estimated_frequency_differential
+                break
+            elif pos_or_neg == 0:
+                self.estimated_qubit_frequency = self.initial_drive_frequency
                 break
             else:
                 print("Please input +1 or -1")
