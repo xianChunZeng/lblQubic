@@ -10,20 +10,16 @@ from pyrpe.src.quapack.pyRPE import RobustPhaseEstimation
 
 import qubic.pygsti.qupig as _qpig
 
-
-class RpeX90:
+class RPE_XR_Experiment:
     """
-    Class that can:
-        1) make RPE circuit experiment designs
-        2) fit curves to RPE results
-        3) plot curves
+    RPE XR experiment
 
     """
-    def __init__(self, processor_spec, target_qubit, max_max_depth=7):
-        self.qid = target_qubit
+
+    def __init__(self, target_pygsti_model, control_qubit, target_qubit, max_max_depth=7):
+        self.register = [control_qubit, target_qubit]
         self.max_depths = [2 ** i for i in range(max_max_depth)]
-        self.processor_spec = processor_spec
-        self.target_model = pygsti.models.modelconstruction.create_explicit_model(processor_spec)
+        self.target_model = target_pygsti_model
         self._make_pygsti_circuits()
         self.circuits = self.rpe_circuits()
 
@@ -36,14 +32,14 @@ class RpeX90:
     def run_and_report(self,  pygsti_jobmanager, num_shots_per_circuit, qchip):
         ds = self._collect_data(pygsti_jobmanager, num_shots_per_circuit, qchip)
         self.rpe_results = self.process_rpe(ds)
-        self.plot_rpe_verbose(ds, num_shots_per_circuit, self.rpe_results)
+        #self.plot_rpe_verbose(ds, num_shots_per_circuit, self.rpe_results)
         last_good_estimate_generation = self.rpe_results.check_unif_local(historical=True)
         print(f'Last good generation: {last_good_estimate_generation}')
         print(f'Estimated phase: {self.rpe_results.angle_estimates[last_good_estimate_generation]}')
         return self.rpe_results
 
     def rpe_circuits(self):
-        return {circ: _qpig.qubic_instructions_from_pygsti_circuit(circ, [self.qid])
+        return {circ: _qpig.qubic_instructions_from_pygsti_circuit(circ, self.register)
                 for circ in self.all_circuits_needing_data}
 
     @property
@@ -53,11 +49,16 @@ class RpeX90:
         return all_circs
 
     def make_cos_circuit(self, power: int):
-        return pygsti.circuits.Circuit([[('Gxpi2', self.qid)]])*power
+        return (pygsti.circuits.Circuit([[('Gxpi2',self.register[0])]])*2+
+            pygsti.circuits.Circuit([[('Gcr',self.register[0],self.register[1])]])*power+
+            pygsti.circuits.Circuit([[('Gxpi2',self.register[0])]])*2)
 
     def make_sin_circuit(self, power: int):
-        return pygsti.circuits.Circuit([[('Gxpi2', self.qid)]])*power + pygsti.circuits.Circuit(
-            [[('Gxpi2', self.qid)]])
+        return (pygsti.circuits.Circuit([[('Gxpi2',self.register[0])]])*2+
+            pygsti.circuits.Circuit([[('Gcr',self.register[0],self.register[1])]])*power+
+            pygsti.circuits.Circuit([[('Gxpi2',self.register[0])]])*2+
+            pygsti.circuits.Circuit([[('Gzpi2',self.register[1])]])*2+
+            pygsti.circuits.Circuit([[('Gxpi2',self.register[1])]])*3)
 
     def _make_pygsti_circuits(self):
         self.sin_circs = {i: self.make_sin_circuit(i) for i in self.max_depths}
@@ -76,8 +77,8 @@ class RpeX90:
         # Post-process the RPE data from the pyGSTi dataset
         the_experiment = RPE_Experiment()
         for i in self.max_depths:
-            the_experiment.process_sin(i, (int(dataset[self.sin_circs[i]]['0']), int(dataset[self.sin_circs[i]]['1'])))
-            the_experiment.process_cos(i, (int(dataset[self.cos_circs[i]]['0']), int(dataset[self.cos_circs[i]]['1'])))
+            the_experiment.process_sin(i, (int(dataset[self.sin_circs[i]]['00']), int(dataset[self.sin_circs[i]]['01'])))
+            the_experiment.process_cos(i, (int(dataset[self.cos_circs[i]]['00']), int(dataset[self.cos_circs[i]]['01'])))
         return RobustPhaseEstimation(the_experiment)
 
     def plot_rpe_verbose(self, dataset, num_shots, rpe_results):
@@ -107,4 +108,4 @@ class RpeX90:
         """
 
         """
-        return pygsti_jobmanager.collect_dataset(self.circuits, num_shots_per_circuit, qchip)
+        return pygsti_jobmanager.collect_dataset(self.circuits, num_shots_per_circuit, qchip=qchip)
