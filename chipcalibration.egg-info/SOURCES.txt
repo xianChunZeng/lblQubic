@@ -1,8 +1,0 @@
-LICENSE
-README.md
-setup.py
-chipcalibration.egg-info/PKG-INFO
-chipcalibration.egg-info/SOURCES.txt
-chipcalibration.egg-info/dependency_links.txt
-chipcalibration.egg-info/requires.txt
-chipcalibration.egg-info/top_level.txt
