@@ -27,7 +27,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         """
         run the time Rabi experiments and make a GMM Manager
         """
-        data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
+        data = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
         self.raw_iq_shots = data.copy()
         self.gmm_manager.fit(data)
         self.gmm_manager.set_labels_maxtomin(self.first_batch, [0, 1])
@@ -113,7 +113,7 @@ class TimeRabi(AbstractCalibrationExperiment):
 
         will also create a GMM Manager along the way
         """
-        self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
+        self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
         fit = self._fit_data(self.shots[self.target_register[0]], fit_type, period)
         self.fitted_rabi_period = fit[0][2]
         
@@ -200,7 +200,6 @@ class TimeRabi(AbstractCalibrationExperiment):
         returns raw IQ shots
         """
         return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
-    
 #==========================================================================================
     
 class AmpRabi(AbstractCalibrationExperiment):
@@ -316,4 +315,3 @@ class AmpRabi(AbstractCalibrationExperiment):
         returns raw IQ shots
         """
         return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
-
