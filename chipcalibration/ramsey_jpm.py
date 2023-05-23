@@ -89,7 +89,7 @@ class RamseyExperiment(AbstractCalibrationExperiment):
 
     def run_ramsey(self, drive_frequency, delay_interval, jobmanager, num_shots_per_circuit, qchip):
         circuits = self.ramsey_circuits(drive_frequency, delay_interval)
-        return jobmanager.collect_classified_shots(circuits, num_shots_per_circuit, qchip)
+        return jobmanager.collect_classified_shots(circuits, num_shots_per_circuit, qchip=qchip)
 
     def _fit_data(self, shot_data, fit_routine='fft', prior_estimates=None):
         """
