@@ -1,5 +1,6 @@
 import networkx as nx
 import logging
+import matplotlib.pyplot as plt
 
 class CalibrationGraph:
 
@@ -40,6 +41,11 @@ class CalibrationGraph:
             except Exception as e:
                 logging.getLogger(__name__).warning('{} not successful; error: {}'.format(node, e))
                 continue
+
+            if show_plots:
+                figure = plt.figure()
+                cal_obj.plot_results(figure)
+                plt.show()
 
             cal_obj.update_qchip(self.qchip)
             cal_obj.update_gmm_manager(self.gmm_manager)

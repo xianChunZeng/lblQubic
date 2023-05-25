@@ -38,15 +38,9 @@ class AbstractCalibrationExperiment(ABC):
     """
 
     @abc.abstractmethod
-    def __init__(self, target_register, readout_register, experimental_parameters):
+    def __init__(self, target_register, readout_register):
         self.target_register = target_register
         self.readout_register = readout_register
-
-        self.params = experimental_parameters # pulse widths, amplitudes, frequencies, etc...
-
-        self.circuits = self._make_circuits()
-        self.optimization_parameters = ['param_label_1', 'param_label_2', '...']
-        self.final_estimated_params = None
 
     @abc.abstractmethod
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
@@ -57,35 +51,20 @@ class AbstractCalibrationExperiment(ABC):
         self.run(jobmanager, num_shots_per_circuit, qchip)
         return self.report()
         """
-        data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
-        fit = self._fit_data(data)
-        #plt.plot(fit)
-        #make report and save
-
-        self.final_estimated_params = 1 # find the estimate based on the experiment type, the data, and the fit
-        return self.final_estimated_params
-
-    @abc.abstractmethod
-    def _fit_data(self, data, fit_routine=None, prior_estimates=None):
         pass
 
-
-
-    @abc.abstractmethod
-    def _make_circuits(self):
-        """
-        makes the circuits,
-        all the default circuit parameters are stored in qchip
-        and any changes are stored as class properties set at initialization
-        note that the qchip is not stored in a calibration experiment,
-        it is managed by the jobmanager, and a calibration class can update its parameters
-        """
+    @abc.abstractproperty
+    def results(self):
         pass
 
     @abc.abstractmethod
-    def _collect_data(self, jobmanager, num_shots_per_circuit, qchip):
-        """
-        runs the circuits using the jabmanager
-        the GMMM and the FPGA/Channel configs and the qchip is managed
-        """
+    def plot_results(self, fig):
+        pass
+
+    @abc.abstractmethod
+    def update_qchip(self, qchip):
+        pass
+
+    @abc.abstractmethod
+    def update_gmm_manager(self, gmm_manager):
         pass

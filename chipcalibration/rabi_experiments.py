@@ -87,6 +87,19 @@ class GMMRabi(AbstractCalibrationExperiment):
         self.first_batch = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
         return jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
 
+    @property
+    def results(self):
+        return None
+
+    def plot_results(self):
+        pass
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
+
+    def update_qchip(self, qchip):
+        pass
+
 class TimeRabi(AbstractCalibrationExperiment):
     """
     Time Rabi experiment based off standard Experiment class
@@ -200,6 +213,19 @@ class TimeRabi(AbstractCalibrationExperiment):
         returns raw IQ shots
         """
         return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
+
+    @property
+    def results(self):
+        return None
+
+    def plot_results(self):
+        pass
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
+
+    def update_qchip(self, qchip):
+        pass
 #==========================================================================================
     
 class AmpRabi(AbstractCalibrationExperiment):
@@ -315,3 +341,16 @@ class AmpRabi(AbstractCalibrationExperiment):
         returns raw IQ shots
         """
         return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
+
+    @property
+    def results(self):
+        return None
+
+    def plot_results(self):
+        pass
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
+
+    def update_qchip(self, qchip):
+        pass
