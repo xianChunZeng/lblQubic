@@ -12,21 +12,20 @@ class GMMRabi(AbstractCalibrationExperiment):
     """
     Time Rabi experiments to construct GMM Managers for the register
     """
-    def __init__(self, target_qubits, target_amplitude, pulse_width_interval,
-                 channel_configs):
+    def __init__(self, target_qubits, pulse_width_interval,
+                 channel_configs, drive_amplitude=None):
         self.target_register = target_qubits
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in self.target_register}
 
-        self.drive_amplitude = target_amplitude
+        self.drive_amplitude = drive_amplitude
         self.pulse_widths = pulse_width_interval
-
-        self.circuits = self._make_circuits()
 
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip, plotting=True):
         """
         run the time Rabi experiments and make a GMM Manager
         """
+        self.circuits = self._make_circuits(qchip)
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
         self.raw_iq_shots = data.copy()
         self.gmm_manager.fit(data)
@@ -57,7 +56,7 @@ class GMMRabi(AbstractCalibrationExperiment):
     def _fit_data(self, data, fit_routine=None, prior_estimates=None):
         pass
 
-    def _make_circuits(self):
+    def _make_circuits(self, qchip):
         """
         Make list of circuits used for rabi measurement. and the list of pulse width. So there will be a total of
         1 circuits, each of which contains len(pulse_widths) measurements. A 400 us
@@ -65,6 +64,10 @@ class GMMRabi(AbstractCalibrationExperiment):
         """
         circuits = []
         for qid in self.target_register:
+            if self.drive_amplitude is not None:
+                drive_amplitude = qchip.gates['{}rabi'.format(qid)].contents[0].amp
+            else:
+                drive_amplitude = self.drive_amplitude
             for twidth in self.pulse_widths:
                 cur_circ = []
                 cur_circ.append({'name': 'delay', 't': 400.e-6})
@@ -72,7 +75,7 @@ class GMMRabi(AbstractCalibrationExperiment):
                     pass
                 else: 
                     cur_circ.append({'name': 'rabi', 'qubit': [qid],
-                                 'modi': {(0, 'twidth'): twidth}, (0, 'amp'): self.drive_amplitude})
+                                 'modi': {(0, 'twidth'): twidth}, (0, 'amp'): drive_amplitude})
                 cur_circ.append({'name': 'barrier', 'qubit': self.target_register})
                 for qid_read in self.target_register:
                     cur_circ.append({'name': 'read', 'qubit': [qid_read]})
@@ -95,7 +98,8 @@ class GMMRabi(AbstractCalibrationExperiment):
         pass
 
     def update_gmm_manager(self, gmm_manager):
-        pass
+        for qubit in self.target_register:
+            gmm_manager.gmm_dict[qubit] = self.gmm_manager.gmm_dict[qubit]
 
     def update_qchip(self, qchip):
         pass

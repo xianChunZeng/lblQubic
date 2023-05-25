@@ -1,164 +1,243 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import qubic.toolchain as tc
+import pdb
+from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 from qubic.state_disc import GMMManager
+import warnings
 from scipy.optimize import curve_fit
 import copy
-
-ACC_BUFSIZE = 1000
-
-class Ramsey:
-    """
-    Define circuits, take data, and plot Ramsey patterns
-
-    TODO: add FFT for coarse period finding
-    """
-    def __init__(self, qubits, delaytime, qchip, fpga_config, channel_configs, freq_offs_dict=None):
-        """
-        Create rabi circuits according to input parameters, then compile to asm binaries.
-        """
-        self.qubits = qubits
-        self.circuits = self._make_ramsey_circuit(qubits, delaytime, qchip, freq_offs_dict)
-        self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in qubits}
-        
-        
-        self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
-        compiled_progs = tc.run_compile_stage(self.circuits, fpga_config, qchip)
-        self.raw_asm_progs = tc.run_assemble_stage(compiled_progs, channel_configs)
-        
-    def _make_ramsey_circuit(self, qubits, delaytime, qchip, freq_offs_dict=None):
-        """
-        Make a circuit used for ramsey measurement with the list of delaytime. So there will be a total of 
-        1 circuits, each of which contains len(delaytime) measurements. A 400 us 
-        delay is inserted between each measurement.
-        Limitations: 
-        1. Length of the delaytime list is restricted to 1024 because of memory
-        2. Due to command buffer limitation we can have 341 of x90->delay->X90
-
-        TODO: have global class attribute circuit that gets set
-        
-        """
-        circuit = []
-        self.delaytime = delaytime
-        if freq_offs_dict is None:
-            freq_offs_dict = {q: 0 for q in qubits}
-        for dtime in delaytime:
-            for qubit in qubits:
-                drivefreq = qchip.gates[qubit + 'X90'].contents[0].fcarrier + freq_offs_dict[qubit]
-                circuit.append({'name': 'delay', 't': 400.e-6, 'qubit': [qubit]})
-                circuit.append({'name': 'X90', 'qubit': [qubit], 'modi':{(0, 'fcarrier'): drivefreq}})
-                circuit.append({'name': 'delay', 't': dtime, 'qubit':[qubit]})
-                circuit.append({'name': 'X90', 'qubit': [qubit], 'modi':{(0, 'fcarrier'): drivefreq}})
-                circuit.append({'name': 'read', 'qubit': [qubit]})
-
-        return circuit
-        
-        
-    def run(self, circuit_runner, nsamples):
-        """
-        Run the ramsey circuit with nsamples shots.
-    
-        Parameters
-        ----------
-            circuit_runner : CircuitRunner object
-            nsamples : int
-        """
-        circuit_runner.load_circuit(self.raw_asm_progs)
-        #Total delay is sum of 500 us for every measurment and all the delays
-        
-        self.s11 = circuit_runner.run_circuit(nsamples,len(self.delaytime), delay_per_shot=(500.e-6*len(self.delaytime))+sum(self.delaytime))
-        self._fit_gmm()
-
-    def _fit_gmm(self):
-        self.gmm_manager.fit(self.s11)
-        self.gmm_manager.set_labels_maxtomin({chan: data[:,0] for chan, data in self.s11.items()},labels_maxtomin = [1,0])
-        self.state_disc_shots = self.gmm_manager.predict(self.s11)
-        self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit], axis=0) for qubit in self.state_disc_shots.keys()}
-        self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0, axis=0) for qubit in self.state_disc_shots.keys()}
-
-    def plot_fits(self, qubit):
-        plt.plot(self.delaytime, self.ones_frac[qubit], '.')
-        try:
-            plt.plot(self.delaytime, self._cos_exp(self.delaytime, *self.fit_params[qubit][0]))
-        except KeyError:
-            pass
+import logging
+from chipcalibration.graph import CalibrationGraph
+from chipcalibration.rabi_experiments import GMMRabi
 
 
-    def _cos_exp(self, x, A, B, drive_freq, phi, exp_decay):
-        return A*np.exp(-x/exp_decay)*np.cos(2*np.pi*x*drive_freq - phi) + B
-        
+from collections import OrderedDict
 
-    def fit_ramsey_freq(self, prior_fit_params, use_fft=True):
+class RamseyExperiment(AbstractCalibrationExperiment):
+
+    def __init__(self, target_register, readout_register, delay_interval, drive_frequency):
+        if len(target_register) > 1:
+            raise ValueError('This class only supports Ramsey experiments on a single target qubit')
+        if type(target_register) is not list:
+            target_register = [target_register]
+
+        super().__init__(target_register, readout_register)
+        self.delay_interval = delay_interval
+        self.drive_frequency = drive_frequency
+        self.circuits = self._make_ramsey_circuits()
+        self.prior_fit_params = [0.720, 0.5, 500e3, 0, 1.5e-5]
+        self._results = None
+
+    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
+        shots = jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
+        observed_probabilities = np.average(shots[self.target_register[0]], axis=1).flatten()
+
+        cos_exp_fit = self._fit_cos_exp(observed_probabilities, prior_estimates=self.prior_fit_params)
+        exp_fit = self._fit_exp(observed_probabilities, prior_estimates=[self.prior_fit_params[0], 
+                                                        self.prior_fit_params[1], self.prior_fit_params[-1]])
+
+        self._results = {}
+        if cos_exp_fit is not None:
+            self._results['cos_exp'] = {'scale': cos_exp_fit[0][0], 'offset': cos_exp_fit[0][1], 
+                                       'freq': cos_exp_fit[0][2], 'phase': cos_exp_fit[0][3], 'decay_time': cos_exp_fit[0][4],
+                                        'total_var': np.diag(cos_exp_fit[1]), 
+                                        'fit_resid': self._calc_fit_res_sq(self.delay_interval, observed_probabilities, cos_exp_fit[0], self._cos_exp)}
+        else:
+            self._results['cos_exp'] = None
+
+        if exp_fit is not None:
+            self._results['exp'] = {'scale': exp_fit[0][0], 'offset': exp_fit[0][1], 'decay_time': exp_fit[0][2],
+                                    'total_var': np.diag(exp_fit[1]),
+                                    'fit_resid': self._calc_fit_res_sq(self.delay_interval, observed_probabilities, exp_fit[0], self._exp)}
+        else:
+            self._results['exp'] = None
+
+        self.cos_exp_fit = cos_exp_fit
+        self.exp_fit = exp_fit
+        self.observed_probabilities = observed_probabilities
+        self.shots = shots
+
+    @staticmethod
+    def _calc_fit_res_sq(delay_interval, observed_probabilities, fit_params, fit_function):
+        return np.sum((observed_probabilities.flatten() - fit_function(delay_interval, *fit_params))**2)
+
+
+    def plot_results(self, fig):
+        ax = fig.add_subplot(111)
+        ax.plot(self.delay_interval, self.observed_probabilities, '.-', label='results')
+        if self.cos_exp_fit is not None:
+            ax.plot(self.delay_interval, self._cos_exp(self.delay_interval, *self.cos_exp_fit[0]), label='cos exp fit')
+        if self.exp_fit is not None:
+            ax.plot(self.delay_interval, self._exp(self.delay_interval, *self.exp_fit[0]), label='exp_fit')
+        ax.set_xlabel('ramsey delay (s)')
+        ax.set_ylabel('|1> state population')
+        ax.legend()
+
+
+    def _make_ramsey_circuits(self):
+        circuits = []
+        for dtime in self.delay_interval:
+            cur_circ = []
+            cur_circ.append({'name': 'delay', 't': 400.e-6, 'qubit': self.target_register})
+            cur_circ.append(
+                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'fcarrier'): self.drive_frequency}})
+            cur_circ.append({'name': 'delay', 't': dtime, 'qubit': self.target_register})
+            cur_circ.append(
+                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'fcarrier'): self.drive_frequency}})
+            cur_circ.append({'name': 'read', 'qubit': self.target_register})
+            circuits.append(cur_circ)
+        return circuits
+
+    def _fit_cos_exp(self, observed_probabilities, use_initial_fft=True, prior_estimates=None):
         """
         cosine decaying exponentially with offset
         params are [A, B, drive_freq, phi, exp_decay]
         """
         self.fit_params = {}
-        prior_fit_params = copy.deepcopy(prior_fit_params)
-        for qubit in self.qubits:
-            if use_fft:
-                freq_ind_max = np.argmax(np.abs(np.fft.rfft(self.ones_frac[qubit])[1:])) + 1
-                freq_max = np.fft.rfftfreq(len(self.delaytime), np.diff(self.delaytime)[0])[freq_ind_max]
-                prior_fit_params[qubit][2] = freq_max
-            try:
-                self.fit_params[qubit] = curve_fit(self._cos_exp, self.delaytime[1:], self.ones_frac[qubit][1:])
-            except RuntimeError:
-                print('{} could not be fit')
+        prior_fit_params = copy.deepcopy(prior_estimates)
+        qid = self.target_register[0]
+        if use_initial_fft:
+            freq_ind_max = np.argmax(np.abs(np.fft.rfft(observed_probabilities)[1:])) + 1
+            freq_max = np.fft.rfftfreq(len(self.delay_interval), 
+                                       np.diff(self.delay_interval)[0])[min(freq_ind_max, len(observed_probabilities))]
+            prior_fit_params[2] = freq_max
+        try:
+            fit = curve_fit(self._cos_exp, self.delay_interval[1:], observed_probabilities[1:].flatten(),
+                                               prior_fit_params)
+        except RuntimeError:
+            fit = None
+            logging.getLogger(__name__).warning('cos_exp could not be fit')
+        return fit
 
-
-
-class RamseyOptimize:
-
-    def __init__(self, qubits, delaytime, qchip, fpga_config, channel_configs):
-        self.qubits = qubits
-        self.delaytime = delaytime
-        self.qchip = qchip
-        self.fpga_config = fpga_config
-        self.channel_configs = channel_configs
-        self.initial_ramsey = Ramsey(qubits, delaytime, qchip, fpga_config, channel_configs)
-
-    def run_optimize_step(self, circuit_runner, nsamples, prior_fit_params):
-        #run initial sweep
-        self.initial_ramsey.run(circuit_runner, nsamples)
-        self.initial_ramsey.fit_ramsey_freq(prior_fit_params)
-        initial_params = copy.deepcopy(self.initial_ramsey.fit_params)
-        for qubit in self.qubits:
-            self.initial_ramsey.plot_fits(qubit)
-            plt.show()
-
-        #run positive freq
-        freq_offs_dict = {q: initial_params[q][0][2] for q in initial_params.keys()}
-        pos_ramsey = Ramsey(self.qubits, self.delaytime, self.qchip, self.fpga_config, 
-                            self.channel_configs, freq_offs_dict)
-        pos_ramsey.run(circuit_runner, nsamples)
-        pos_ramsey.fit_ramsey_freq({q: initial_params[q][0] for q in self.qubits})
-        for qubit in self.qubits:
-            pos_ramsey.plot_fits(qubit)
-            plt.title(qubit + ' + {} Hz'.format(freq_offs_dict[qubit]))
-            plt.show()
-
-        #run negative freq
-        freq_offs_dict = {q: -initial_params[q][0][2] for q in initial_params.keys()}
-        neg_ramsey = Ramsey(self.qubits, self.delaytime, self.qchip, self.fpga_config, 
-                            self.channel_configs, freq_offs_dict)
-        neg_ramsey.run(circuit_runner, nsamples)
-        neg_ramsey.fit_ramsey_freq({q: initial_params[q][0] for q in self.qubits})
-        for qubit in self.qubits:
-            neg_ramsey.plot_fits(qubit)
-            plt.title(qubit + ' - {} Hz'.format(freq_offs_dict[qubit]))
-            plt.show()
-
-        return pos_ramsey.fit_params, neg_ramsey.fit_params
-
-    def update_qubit_freq(self, qubit, sign, qchip):
+    def _fit_exp(self, observed_probabilities, prior_estimates=None):
         """
-        update the qubit frequency in the qchip object
-
-        sign : int
-            if sign is +1, add the initial fit freq, if -1 subtract
+        cosine decaying exponentially with offset
+        params are [A, B, drive_freq, phi, exp_decay]
         """
+        self.fit_params = {}
+        prior_fit_params = copy.deepcopy(prior_estimates)
+        qid = self.target_register[0]
+        try:
+            fit = curve_fit(self._exp, self.delay_interval[1:], observed_probabilities[1:].flatten(),
+                                               prior_fit_params)
+        except RuntimeError:
+            fit = None
+            logging.getLogger(__name__).warning('exp could not be fit')
+        return fit
 
-        if np.abs(sign) != 1:
-            raise Exception('sign must be +/-1')
+    @staticmethod
+    def _cos_exp(x, scale, offset, drive_freq, phi, exp_decay):
+        return scale*np.exp(-x/exp_decay)*np.cos(2*np.pi*x*drive_freq - phi) + offset
 
-        qchip.qubits[qubit].freq += sign * self.initial_ramsey.fit_params[qubit][0][2]
+    @staticmethod
+    def _exp(x, scale, offset, exp_decay):
+        return scale*np.exp(-x/exp_decay) + offset
+
+    @property
+    def results(self):
+        return self._results
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
+
+    def update_qchip(self, qchip):
+        pass
+
+class RamseyOptimize(AbstractCalibrationExperiment):
+
+    def __init__(self, target_register, readout_register, delay_stepsize, n_delay_steps):
+        self.delay_interval = np.arange(0, n_delay_steps*delay_stepsize, delay_stepsize)
+
+        super().__init__(target_register, readout_register)
+
+        self._results = None
+
+    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
+        self.initial_ramsey = RamseyExperiment(self.target_register, self.readout_register, 
+                                               self.delay_interval, qchip.qubits[self.target_register[0]].freq)
+        self.initial_ramsey.run_and_report(jobmanager, num_shots_per_circuit, qchip)
+
+        self._results = {'initial': self.initial_ramsey.results}
+        logging.getLogger(__name__).info('done initial ramsey; results: {}'.format(self._results))
+
+        if self.initial_ramsey.results['exp'] is not None and self.initial_ramsey.results['cos_exp'] is not None:
+            if self.initial_ramsey.results['exp']['fit_resid'] > self.initial_ramsey.results['cos_exp']['fit_resid']:
+                self.delta_freq = self.initial_ramsey.results['cos_exp']['freq']
+            else:
+                self.delta_freq = 0
+                logging.getLogger(__name__).info('found deltaf = 0')
+
+        elif self.initial_ramsey.results['exp'] is None and self.initial_ramsey.results['cos_exp'] is None:
+            raise RuntimeError('All initial Ramsey fits failed!')
+
+        elif self.initial_ramsey.results['exp'] is None:
+            self.delta_freq = self.initial_ramsey.results['cos_exp']['freq']
+
+        else:
+            self.delta_freq = 0
+            self._results['delta_freq'] = 0
+            logging.getLogger(__name__).info('found deltaf = 0')
+
+
+        if self.delta_freq != 0:
+            self.pos_ramsey = RamseyExperiment(self.target_register, self.readout_register, 
+                                               self.delay_interval, qchip.qubits[self.target_register[0]].freq + self.delta_freq)
+            self.neg_ramsey = RamseyExperiment(self.target_register, self.readout_register, 
+                                               self.delay_interval, qchip.qubits[self.target_register[0]].freq - self.delta_freq)
+
+            self.pos_ramsey.run_and_report(jobmanager, num_shots_per_circuit, qchip)
+            logging.getLogger(__name__).info('done + ramsey; results: {}'.format(self.pos_ramsey.results))
+            self.neg_ramsey.run_and_report(jobmanager, num_shots_per_circuit, qchip)
+            logging.getLogger(__name__).info('done - ramsey; results: {}'.format(self.neg_ramsey.results))
+
+            pos_ramsey_valid = self.pos_ramsey.results['exp'] is not None and (self.pos_ramsey.results['cos_exp'] is None
+                                            or (self.pos_ramsey.results['exp']['fit_resid'] < self.pos_ramsey.results['cos_exp']['fit_resid'])\
+                                            or (self.pos_ramsey.results['cos_exp']['freq'] < 50))
+            
+            neg_ramsey_valid = self.neg_ramsey.results['exp'] is not None and (self.neg_ramsey.results['cos_exp'] is None
+                                            or (self.neg_ramsey.results['exp']['fit_resid'] < self.neg_ramsey.results['cos_exp']['fit_resid'])\
+                                            or (self.neg_ramsey.results['cos_exp']['freq'] < 50))
+
+            if pos_ramsey_valid and neg_ramsey_valid: #neither show oscillations, meaning something went wrong
+                raise RuntimeError('+/- freq could not be determined!')
+
+            if not (pos_ramsey_valid or neg_ramsey_valid): #both show significant oscillations
+                self.delta_freq = 0
+
+            if neg_ramsey_valid:
+                self.delta_freq *= -1
+
+            self._results['pos'] = self.pos_ramsey.results
+            self._results['neg'] = self.neg_ramsey.results
+            self._results['delta_freq'] = self.delta_freq
+
+    @property
+    def results(self):
+        return self._results
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
+
+    def update_qchip(self, qchip):
+        qchip.qubits[self.target_register[0]].freq += self.delta_freq
+
+    def plot_results(self, fig):
+        figs = fig.subfigures(3,1, hspace=1)
+        self.initial_ramsey.plot_results(figs[0])
+        self.neg_ramsey.plot_results(figs[1])
+        self.pos_ramsey.plot_results(figs[2])
+
+def get_refinement_graph(qubits, dt_steps=[2.e-9, 30.e-9, 500.e-9], n_delay_times=100, shots_per_circuit=1000):
+    cal_graph = CalibrationGraph()
+    for qubit in qubits:
+        pred_nodes = None
+
+        for i, step in enumerate(dt_steps):
+            cal_obj = RamseyOptimize([qubit], [qubit], step, n_delay_times)
+            step_name = '{}_ramsey_opt_{}'.format(qubit, i)
+            cal_graph.add_calibration_step(step_name, cal_obj, [qubit], pred_nodes, shots_per_circuit)
+            pred_nodes = ['{}_ramsey_opt_{}'.format(qubit, i)]
+
+    return cal_graph
+
+
