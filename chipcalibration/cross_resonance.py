@@ -5,6 +5,21 @@ from collections import OrderedDict
 from qubic.job_manager_jpm import JobManager
 import numpy as np
 
+class CrossResonanceTomography(): #AbstractTomographyExperiment
+    def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp):
+        self.target_qid = target_qid
+        self.control_qid = control_qid
+        self.readout_register = [control_qid, target_qid]
+
+        self.pulse_width_interval = pulse_width_interval
+        self.drive_amp_interval = drive_amp_interval
+
+        self.circuits = self._make_circuits()
+        self.optimization_parameters = ['CR.amp', 'CR.twidth']
+        self.final_estimated_params = None
+
+
+#====================================================================
 
 class CrossResonanceCalibration(AbstractCalibrationExperiment):
     """
@@ -35,7 +50,7 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
             (6, len(self.pulse_width_interval), len(self.drive_amp_interval)))
         for index_pair in data.keys():
             tomographic_curves[:, index_pair[0], index_pair[1]] = \
-                2 * np.average(data[index_pair][self.target_qid], axis=1)[:, 0] - 1
+                1-2 * np.average(data[index_pair][self.target_qid], axis=1)[:, 0]
         self.tomographic_curves = tomographic_curves
 
         # fit = self._fit_data(data)
@@ -150,9 +165,49 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
                       abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
                       )
     
-    
-    
-    def _make_circuits(self):
+    def _make_circuits_echoed(self, crosstalk_drive_amp=0.01):
+        circuits = OrderedDict()
+        control_qubit = self.control_qid
+        target_qubit = self.target_qid
+        for id_twidth, twidth in enumerate(self.pulse_width_interval):
+            for id_amp, amp in enumerate(self.drive_amp_interval):
+                amp_time_circuit_list = []  # experiments for a fixed time and amplitude
+                for ctrl_state in [0, 1]:
+                    for axis in ('X', 'Y', 'Z'):
+                        circ = [{'name': 'delay', 't': 400.e-6}]
+                        if ctrl_state == 1:
+                            circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                            circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                        'modi': {(0, 'twidth'): twidth,
+                                                 (1, 'twidth'): twidth,
+                                                 (0, 'amp'): amp,
+                                                 (1, 'amp'): crosstalk_drive_amp}})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                        'modi': {(0, 'twidth'): twidth,
+                                                 (1, 'twidth'): twidth,
+                                                 (0, 'amp'): amp,
+                                                 (1, 'amp'): crosstalk_drive_amp,
+                                                 (0, 'pcarrier'): np.pi,
+                                                 (1, 'pcarrier'): np.pi}})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        if axis == 'X':
+                            circ.append({'name': 'Y-90', 'qubit': [target_qubit]})
+
+                        elif axis == 'Y':
+                            circ.append({'name': 'X90', 'qubit': [target_qubit]})
+                        circ.append({'name': 'read', 'qubit': [control_qubit]})
+                        circ.append({'name': 'read', 'qubit': [target_qubit]})
+                        amp_time_circuit_list.append(circ)
+                circuits[(id_twidth, id_amp)] = amp_time_circuit_list
+        return circuits
+
+    # %%
+
+    def _make_circuits(self, crosstalk_drive_amp=0.01):
         """
         makes and returns the circuits
 
@@ -166,24 +221,25 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
         """
 
         circuits = OrderedDict()
+        control_qubit = self.control_qid
+        target_qubit = self.target_qid
         for id_twidth, twidth in enumerate(self.pulse_width_interval):
             for id_amp, amp in enumerate(self.drive_amp_interval):
                 amp_time_circuit_list = []  # experiments for a fixed time and amplitude
-                for control_state in [0, 1]:
+                for ctrl_state in [0, 1]:
                     for axis in ['X', 'Y', 'Z']:
                         circ = [{'name': 'delay', 't': 400.e-6}]
-                        if control_state == 1:
-                            circ.append({'name': 'X90', 'qubit': [self.control_qid]})
-                            circ.append({'name': 'X90', 'qubit': [self.control_qid]})
-                        circ.append({'name': 'CR', 'qubit': [self.control_qid, self.target_qid],
-                                     'modi': {(0, 'twidth'): twidth, (0, 'amp'): amp}})
-                        if axis == 'X':
-                            circ.append({'name': 'Y-90', 'qubit': [self.target_qid]})
-                        elif axis == 'Y':
-                            circ.append({'name': 'X90', 'qubit': [self.target_qid]})
-                        circ.append({'name': 'barrier', 'qubit': self.readout_register})
-                        for qid in self.readout_register:
-                            circ.append({'name': 'read', 'qubit': [qid]})
+                        circ = [{'name': 'delay', 't': 400.e-6}]
+                        if ctrl_state == 1:
+                            circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                            circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                     'modi': {(0, 'twidth'): twidth,
+                                              (1, 'twidth'): twidth,
+                                              (0, 'amp'): amp,
+                                              (1, 'amp'): crosstalk_drive_amp}})
+                        circ.append({'name': 'read', 'qubit': [control_qubit]})
+                        circ.append({'name': 'read', 'qubit': [target_qubit]})
                         amp_time_circuit_list.append(circ)
                 circuits[(id_twidth, id_amp)] = amp_time_circuit_list
         return circuits
