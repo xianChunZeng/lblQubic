@@ -94,7 +94,7 @@ class GMMRabi(AbstractCalibrationExperiment):
     def results(self):
         return None
 
-    def plot_results(self):
+    def plot_results(self, fig):
         pass
 
     def update_gmm_manager(self, gmm_manager):

@@ -3,6 +3,10 @@ import logging
 import matplotlib.pyplot as plt
 
 class CalibrationGraph:
+    """
+    Class for specifying a sequence of calibration steps, each represented by an AbstractCalibrationExperiment
+    object. Dependencies between calibration steps are expressed as directional edges in a DAG.
+    """
 
     def __init__(self):
         self.graph = nx.DiGraph()
@@ -14,7 +18,13 @@ class CalibrationGraph:
                 assert node in self.graph.nodes()
                 self.graph.add_edge(node, name)
 
-    def run_calibration(self, job_manager, initial_qchip, initial_gmm_manager=None, show_plots=False, save_plots=False):
+    def rerun_failed_steps(self, job_manager, show_plots, save_plots):
+        self.run_calibration(job_manager, self.qchip, run_all=False, show_plots=show_plots, save_plots=save_plots)
+
+    def run_calibration(self, job_manager, initial_qchip, initial_gmm_manager=None, run_all=True, show_plots=False, save_plots=False):
+        if run_all:
+            for node in self.graph.nodes:
+                self.graph.nodes[node]['success'] = False
         self.qchip = initial_qchip
         if initial_gmm_manager is not None:
             self.gmm_manager = initial_gmm_manager
@@ -23,6 +33,9 @@ class CalibrationGraph:
 
         node_list = nx.topological_sort(self.graph)
         for node in node_list:
+            if self.graph.nodes[node]['success'] == True:
+                continue
+
             exec_node = True
             for pred_node in self.graph.predecessors(node):
                 if self.graph.nodes[pred_node]['success'] == False:
@@ -30,30 +43,35 @@ class CalibrationGraph:
                     exec_node = False
                     break
             if exec_node == False:
-                break
-
-            job_manager.gmm_manager = self.gmm_manager
-            
-            cal_obj = self.graph.nodes()[node]['cal_obj']
-            nshots = self.graph.nodes()[node]['shots_per_circuit']
-
-            try:
-                cal_obj.run_and_report(job_manager, nshots, self.qchip)
-
-            except Exception as e:
-                logging.getLogger(__name__).warning('{} not successful; error: {}'.format(node, e))
                 continue
 
-            if show_plots:
-                figure = plt.figure()
-                cal_obj.plot_results(figure)
-                figure
-                plt.show()
+            job_manager.gmm_manager = self.gmm_manager
 
-            cal_obj.update_qchip(self.qchip)
-            cal_obj.update_gmm_manager(self.gmm_manager)
-            self.graph.nodes()[node]['success'] = True
-            self.graph.nodes()[node]['results'] = cal_obj.results
+            self._run_step_and_update(node, job_manager, show_plots)
+            
+    def _run_step_and_update(self, node, job_manager, show_plots):
+        cal_obj = self.graph.nodes()[node]['cal_obj']
+        nshots = self.graph.nodes()[node]['shots_per_circuit']
+
+        try:
+            logging.getLogger(__name__).info('starting calibration step {}'.format(node))
+            cal_obj.run_and_report(job_manager, nshots, self.qchip)
+
+        except Exception as e:
+            logging.getLogger(__name__).warning('{} not successful; error: {}'.format(node, e))
+            return
+
+        if show_plots:
+            figure = plt.figure()
+            cal_obj.plot_results(figure)
+            figure
+            plt.show()
+
+        cal_obj.update_qchip(self.qchip)
+        cal_obj.update_gmm_manager(self.gmm_manager)
+        self.graph.nodes()[node]['success'] = True
+        self.graph.nodes()[node]['results'] = cal_obj.results
+
 
     def append_by_qubit(self, cal_graph):
         sum_graph = nx.union(self.graph, cal_graph.graph, rename=('0_', '1_'))

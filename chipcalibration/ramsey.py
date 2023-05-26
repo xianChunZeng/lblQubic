@@ -10,6 +10,9 @@ import logging
 from chipcalibration.graph import CalibrationGraph
 from chipcalibration.rabi_experiments import GMMRabi
 
+MAX_RAMSEY_FREQ = 15.e6
+MIN_RAMSEY_FREQ = 1000
+
 
 from collections import OrderedDict
 
@@ -161,7 +164,8 @@ class RamseyOptimize(AbstractCalibrationExperiment):
         logging.getLogger(__name__).info('done initial ramsey; results: {}'.format(self._results))
 
         if self.initial_ramsey.results['exp'] is not None and self.initial_ramsey.results['cos_exp'] is not None:
-            if self.initial_ramsey.results['exp']['fit_resid'] > self.initial_ramsey.results['cos_exp']['fit_resid']:
+            if self.initial_ramsey.results['exp']['fit_resid'] > self.initial_ramsey.results['cos_exp']['fit_resid'] and \
+                    MIN_RAMSEY_FREQ < self.initial_ramsey.results['cos_exp']['freq'] < MAX_RAMSEY_FREQ:
                 self.delta_freq = self.initial_ramsey.results['cos_exp']['freq']
             else:
                 self.delta_freq = 0
@@ -191,18 +195,19 @@ class RamseyOptimize(AbstractCalibrationExperiment):
             logging.getLogger(__name__).info('done - ramsey; results: {}'.format(self.neg_ramsey.results))
 
             pos_ramsey_valid = self.pos_ramsey.results['exp'] is not None and (self.pos_ramsey.results['cos_exp'] is None
-                                            or (self.pos_ramsey.results['exp']['fit_resid'] < self.pos_ramsey.results['cos_exp']['fit_resid'])\
-                                            or (self.pos_ramsey.results['cos_exp']['freq'] < 50))
+                                            or (self.pos_ramsey.results['exp']['fit_resid'] < self.pos_ramsey.results['cos_exp']['fit_resid']*1.2)\
+                                            or (self.pos_ramsey.results['cos_exp']['freq'] < MIN_RAMSEY_FREQ) or (self.pos_ramsey.results['cos_exp']['freq'] > MAX_RAMSEY_FREQ))
             
             neg_ramsey_valid = self.neg_ramsey.results['exp'] is not None and (self.neg_ramsey.results['cos_exp'] is None
-                                            or (self.neg_ramsey.results['exp']['fit_resid'] < self.neg_ramsey.results['cos_exp']['fit_resid'])\
-                                            or (self.neg_ramsey.results['cos_exp']['freq'] < 50))
+                                            or (self.neg_ramsey.results['exp']['fit_resid'] < self.neg_ramsey.results['cos_exp']['fit_resid']*1.2)\
+                                            or (self.neg_ramsey.results['cos_exp']['freq'] < MIN_RAMSEY_FREQ) or (self.neg_ramsey.results['cos_exp']['freq'] > MAX_RAMSEY_FREQ))
 
             if pos_ramsey_valid and neg_ramsey_valid: #neither show oscillations, meaning something went wrong
                 raise RuntimeError('+/- freq could not be determined!')
 
             if not (pos_ramsey_valid or neg_ramsey_valid): #both show significant oscillations
                 self.delta_freq = 0
+                logging.getLogger(__name__).info('both +/- show significant oscillations, set deltaf = 0')
 
             if neg_ramsey_valid:
                 self.delta_freq *= -1
@@ -219,15 +224,19 @@ class RamseyOptimize(AbstractCalibrationExperiment):
         pass
 
     def update_qchip(self, qchip):
+        logging.getLogger(__name__).info('updating qchip with df = {}'.format(self.delta_freq))
         qchip.qubits[self.target_register[0]].freq += self.delta_freq
 
     def plot_results(self, fig):
+        fig.suptitle(str(self.target_register))
         figs = fig.subfigures(3,1, hspace=1)
         self.initial_ramsey.plot_results(figs[0])
-        self.neg_ramsey.plot_results(figs[1])
-        self.pos_ramsey.plot_results(figs[2])
+        if hasattr(self, 'neg_ramsey'):
+            self.neg_ramsey.plot_results(figs[1])
+        if hasattr(self, 'pos_ramsey'):
+            self.pos_ramsey.plot_results(figs[2])
 
-def get_refinement_graph(qubits, dt_steps=[2.e-9, 30.e-9, 500.e-9], n_delay_times=100, shots_per_circuit=1000):
+def get_refinement_graph(qubits, dt_steps=[3.e-9, 35.e-9, 500.e-9], n_delay_times=100, shots_per_circuit=1000):
     cal_graph = CalibrationGraph()
     for qubit in qubits:
         pred_nodes = None
