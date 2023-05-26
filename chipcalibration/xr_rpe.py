@@ -18,7 +18,10 @@ class RPE_XR_Experiment:
 
     def __init__(self, target_pygsti_model, control_qubit, target_qubit, max_max_depth=7):
         self.register = [control_qubit, target_qubit]
-        self.max_depths = [2 ** i for i in range(max_max_depth)]
+        if type(max_max_depth) is int:
+            self.max_depths = [2 ** i for i in range(max_max_depth)]
+        else:
+            self.max_depths = max_max_depth
         self.target_model = target_pygsti_model
         self._make_pygsti_circuits()
         self.circuits = self.rpe_circuits()
@@ -32,7 +35,7 @@ class RPE_XR_Experiment:
     def run_and_report(self,  pygsti_jobmanager, num_shots_per_circuit, qchip):
         ds = self._collect_data(pygsti_jobmanager, num_shots_per_circuit, qchip)
         self.rpe_results = self.process_rpe(ds)
-        #self.plot_rpe_verbose(ds, num_shots_per_circuit, self.rpe_results)
+        self.plot_rpe_verbose(ds, num_shots_per_circuit, self.rpe_results)
         last_good_estimate_generation = self.rpe_results.check_unif_local(historical=True)
         print(f'Last good generation: {last_good_estimate_generation}')
         print(f'Estimated phase: {self.rpe_results.angle_estimates[last_good_estimate_generation]}')
@@ -85,14 +88,15 @@ class RPE_XR_Experiment:
         # 1st process the dataset -- probably should design so that I don't have to process every time
         fit = rpe_results
         target_ds = self.simulate_target(num_shots)
+        self.target_ds = target_ds
         target_fit = self.process_rpe(target_ds)
         fig, axs = plt.subplots(3, 1)
-        axs[0].semilogx(self.max_depths, [dataset[c]['1'] for c in self.sin_circs.values()])
-        axs[0].semilogx(self.max_depths, [target_ds[c]['1'] for c in self.sin_circs.values()])
-        axs[0].set_title("1 counts on sin circuits")
-        axs[1].semilogx(self.max_depths, [dataset[c]['1'] for c in self.cos_circs.values()])
-        axs[1].plot(self.max_depths, [target_ds[c]['1'] for c in self.cos_circs.values()])
-        axs[1].set_title("1 counts on cos circuits")
+        axs[0].semilogx(self.max_depths, [dataset[c]['00'] for c in self.sin_circs.values()])
+        axs[0].semilogx(self.max_depths, [target_ds[c]['00'] for c in self.sin_circs.values()])
+        axs[0].set_title("00 counts on sin circuits")
+        axs[1].semilogx(self.max_depths, [dataset[c]['01'] for c in self.cos_circs.values()])
+        axs[1].plot(self.max_depths, [target_ds[c]['01'] for c in self.cos_circs.values()])
+        axs[1].set_title("01 counts on cos circuits")
         axs[2].semilogx(self.max_depths, fit.angle_estimates)
         axs[2].plot(self.max_depths, target_fit.angle_estimates, c='orange')
         axs[2].plot((self.max_depths[0], self.max_depths[-1]), (np.pi / 2, np.pi / 2), c='red')

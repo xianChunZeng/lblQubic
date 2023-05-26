@@ -76,7 +76,7 @@ class RpeX90:
         # Post-process the RPE data from the pyGSTi dataset
         the_experiment = RPE_Experiment()
         for i in self.max_depths:
-            the_experiment.process_sin(i, (int(dataset[self.sin_circs[i]]['0']), int(dataset[self.sin_circs[i]]['1'])))
+            the_experiment.process_sin(i, (int(dataset[self.sin_circs[i]]['1']), int(dataset[self.sin_circs[i]]['0'])))
             the_experiment.process_cos(i, (int(dataset[self.cos_circs[i]]['0']), int(dataset[self.cos_circs[i]]['1'])))
         return RobustPhaseEstimation(the_experiment)
 
