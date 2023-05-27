@@ -7,7 +7,6 @@ import numpy as np
 
 from scipy.optimize import curve_fit
 
-
 def get_omega(eDelta, eOmega_x, eOmega_y):
     """Return \Omega from parameter arguments."""
     eOmega = np.sqrt(eDelta ** 2 + eOmega_x ** 2 + eOmega_y ** 2)
@@ -140,12 +139,19 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         print(rates)
 
         fig, axs = plt.subplots(4)
-        axs[0].plot(self.pulse_width_interval, tomographic_curves[0, :], label='X0')
-        axs[0].plot(self.pulse_width_interval, tomographic_curves[3, :], label='X1')
-        axs[1].plot(self.pulse_width_interval, tomographic_curves[1, :], label='Y0')
-        axs[1].plot(self.pulse_width_interval, tomographic_curves[4, :], label='Y1')
-        axs[2].plot(self.pulse_width_interval, tomographic_curves[2, :], label='Z0')
-        axs[2].plot(self.pulse_width_interval, tomographic_curves[5, :], label='Z1')
+
+        # scatter plots of collected data
+        axs[0].scatter(self.pulse_width_interval, tomographic_curves[0, :], label='X0')
+        axs[0].scatter(self.pulse_width_interval, tomographic_curves[3, :], label='X1')
+        axs[1].scatter(self.pulse_width_interval, tomographic_curves[1, :], label='Y0')
+        axs[1].scatter(self.pulse_width_interval, tomographic_curves[4, :], label='Y1')
+        axs[2].scatter(self.pulse_width_interval, tomographic_curves[2, :], label='Z0')
+        axs[2].scatter(self.pulse_width_interval, tomographic_curves[5, :], label='Z1')
+
+        # plots of predicted curves with extracted Hamiltonian rates
+        axs[0].scatter(self.pulse_width_interval,  avg_X(self.pulse_width_interval, *fits[0][0]))
+        axs[0].scatter(self.pulse_width_interval, avg_X(self.pulse_width_interval, *fits[1][0]))
+
         axs[0].set_title('X0 and X1 response')
         axs[1].set_title('Y0 and Y1 response')
         axs[2].set_title('Z0 and Z1 response')
