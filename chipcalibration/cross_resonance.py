@@ -5,19 +5,156 @@ from collections import OrderedDict
 from qubic.job_manager_jpm import JobManager
 import numpy as np
 
+
+def r_diff(tomo_arr):
+    """
+    returns the r-value curve given the two tomographic curves
+    """
+    return 0.5 * np.sqrt((tomo_arr[3, :, :] - tomo_arr[0, :, :]) ** 2 +
+                         (tomo_arr[4, :, :] - tomo_arr[1, :, :]) ** 2 +
+                         (tomo_arr[5, :, :] - tomo_arr[2, :, :]) ** 2
+                         )
+
+def trace_difference(tomo_arr):
+    """
+    Calculate the trace difference between the two target qubit states
+    """
+    return 0.5 * (abs(tomo_arr[3, :, :] - tomo_arr[0, :, :]) +
+                  abs(tomo_arr[4, :, :] - tomo_arr[1, :, :]) +
+                  abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
+                  )
+
 class CrossResonanceTomography(): #AbstractTomographyExperiment
-    def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp):
+    def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp, pulse_type='std'):
         self.target_qid = target_qid
         self.control_qid = control_qid
         self.readout_register = [control_qid, target_qid]
 
         self.pulse_width_interval = pulse_width_interval
-        self.drive_amp_interval = drive_amp_interval
+        self.drive_amp = drive_amp
 
-        self.circuits = self._make_circuits()
-        self.optimization_parameters = ['CR.amp', 'CR.twidth']
-        self.final_estimated_params = None
+        if pulse_type == 'std':
+            self.circuits = self._make_circuits()
+        elif pulse_type == 'echoed':
+            self.circuits = self._make_circuits_echoed()
+        self.estimated_hamiltonian_params = None
 
+    def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
+        """
+        run the experiment and report
+        """
+        data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
+        self.data = data
+        # tomographic curves of the target qubit for analysis and plotting
+        # stored in the format: [tomo_axis_idx, twidth_idx, amp_idx]
+        tomographic_curves = np.zeros(
+            (6, len(self.pulse_width_interval)))
+        for twidth_idx in range(len(self.pulse_width_interval)):
+            for pauli_idx in range(6):
+                tomographic_curves[pauli_idx, twidth_idx] = \
+                    1-2 * np.average(data[twidth_idx*6+pauli_idx][self.target_qid], axis=1)[:, 0]
+        self.tomographic_curves = tomographic_curves
+
+        fig, axs = plt.subplots(4)
+        axs[0].plot(self.pulse_width_interval, tomographic_curves[0, :], label='X0')
+        axs[0].plot(self.pulse_width_interval, tomographic_curves[3, :], label='X1')
+        axs[1].plot(self.pulse_width_interval, tomographic_curves[1, :], label='Y0')
+        axs[1].plot(self.pulse_width_interval, tomographic_curves[4, :], label='Y1')
+        axs[2].plot(self.pulse_width_interval, tomographic_curves[2, :], label='Z0')
+        axs[2].plot(self.pulse_width_interval, tomographic_curves[5, :], label='Z1')
+        axs[0].set_title('X0 and X1 response')
+        axs[1].set_title('Y0 and Y1 response')
+        axs[2].set_title('Z0 and Z1 response')
+        td = axs[3].plot(self.pulse_width_interval, trace_difference(tomographic_curves), label='td')
+        rdiff = axs[3].plot(self.pulse_width_interval, r_diff(tomographic_curves), label='rdiff')
+        axs[3].set_xlabel('pulse width')
+
+        for i in range(4):
+            axs[i].legend()
+        plt.tight_layout()
+
+        # fit = self._fit_data(data)
+
+    def _make_circuits_echoed(self, crosstalk_drive_amp=0.01):
+        circuits = []
+        control_qubit = self.control_qid
+        target_qubit = self.target_qid
+        for id_twidth, twidth in enumerate(self.pulse_width_interval):
+            for ctrl_state in [0, 1]:
+                for axis in ('X', 'Y', 'Z'):
+                    circ = [{'name': 'delay', 't': 400.e-6}]
+                    if ctrl_state == 1:
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                    'modi': {(0, 'twidth'): twidth,
+                                             (1, 'twidth'): twidth,
+                                             (0, 'amp'): self.drive_amp,
+                                             (1, 'amp'): crosstalk_drive_amp}})
+                    circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                    'modi': {(0, 'twidth'): twidth,
+                                             (1, 'twidth'): twidth,
+                                             (0, 'amp'): self.drive_amp,
+                                             (1, 'amp'): crosstalk_drive_amp,
+                                             (0, 'pcarrier'): np.pi,
+                                             (1, 'pcarrier'): np.pi}})
+                    circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    if axis == 'X':
+                        circ.append({'name': 'Y-90', 'qubit': [target_qubit]})
+
+                    elif axis == 'Y':
+                        circ.append({'name': 'X90', 'qubit': [target_qubit]})
+                    circ.append({'name': 'read', 'qubit': [control_qubit]})
+                    circ.append({'name': 'read', 'qubit': [target_qubit]})
+                    circuits.append(circ)
+        return circuits
+
+    # %%
+
+    def _make_circuits(self, crosstalk_drive_amp=0.01):
+        """
+        makes and returns the circuits
+
+        circuits are stored as an OrderedDict, with keys (id_twidth, id_amp)
+        that correspond to the indices in self.drive_amp_interval and self.pulse_width_interval
+
+        all the default circuit parameters are stored in qchip
+        and any changes are stored as class properties set at initialization
+        note that the qchip is not stored in a calibration experiment,
+        it is managed by the jobmanager, and a calibration class can update its parameters
+        """
+
+        circuits = []
+        control_qubit = self.control_qid
+        target_qubit = self.target_qid
+        for id_twidth, twidth in enumerate(self.pulse_width_interval):
+            amp_time_circuit_list = []  # experiments for a fixed time and amplitude
+            for ctrl_state in [0, 1]:
+                for axis in ['X', 'Y', 'Z']:
+                    circ = [{'name': 'delay', 't': 400.e-6}]
+                    circ = [{'name': 'delay', 't': 400.e-6}]
+                    if ctrl_state == 1:
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                        circ.append({'name': 'X90', 'qubit': [control_qubit]})
+                    circ.append({'name': 'CR_crosstalk', 'qubit': [control_qubit, target_qubit],
+                                 'modi': {(0, 'twidth'): twidth,
+                                          (1, 'twidth'): twidth,
+                                          (0, 'amp'): self.drive_amp,
+                                          (1, 'amp'): crosstalk_drive_amp}})
+                    circ.append({'name': 'read', 'qubit': [control_qubit]})
+                    circ.append({'name': 'read', 'qubit': [target_qubit]})
+                    circuits.append(circ)
+        return circuits
+
+    def _collect_data(self, jobmanager: JobManager, num_shots_per_circuit, qchip):
+        """
+        runs the circuits using the jabmanager
+        the GMMM and the FPGA/Channel configs and the qchip is managed
+        """
+        return jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip)
 
 #====================================================================
 
@@ -26,7 +163,7 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
     Calibrate the cross resonance gate's time and amplitude
     """
 
-    def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp_interval):
+    def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp_interval, pulse_type='std'):
         self.target_qid = target_qid
         self.control_qid = control_qid
         self.readout_register = [control_qid, target_qid]
@@ -34,7 +171,10 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
         self.pulse_width_interval = pulse_width_interval
         self.drive_amp_interval = drive_amp_interval
 
-        self.circuits = self._make_circuits()
+        if pulse_type == 'std':
+            self.circuits = self._make_circuits()
+        elif pulse_type == 'echoed':
+            self.circuits = self._make_circuits_echoed()
         self.optimization_parameters = ['CR.amp', 'CR.twidth']
         self.final_estimated_params = None
 
@@ -67,8 +207,8 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
             axs[0].set_title('X0 and X1 response')
             axs[1].set_title('Y0 and Y1 response')
             axs[2].set_title('Z0 and Z1 response')
-            td = axs[3].plot(self.pulse_width_interval, self.trace_difference(tomographic_curves), label='td')
-            rdiff = axs[3].plot(self.pulse_width_interval, self.r_diff(tomographic_curves), label='rdiff')
+            td = axs[3].plot(self.pulse_width_interval, trace_difference(tomographic_curves), label='td')
+            rdiff = axs[3].plot(self.pulse_width_interval, r_diff(tomographic_curves), label='rdiff')
             axs[3].set_xlabel('pulse width')
             
             for i in range(4):
@@ -84,8 +224,8 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
             axs[1].plot(self.drive_amp_interval, tomographic_curves[4, 0, :], label='Y1')
             axs[2].plot(self.drive_amp_interval, tomographic_curves[2, 0, :], label='Z0')
             axs[2].plot(self.drive_amp_interval, tomographic_curves[5, 0, :], label='Z1')
-            td = axs[3].plot(self.drive_amp_interval, self.trace_difference(tomographic_curves)[0, :], label='td')
-            rdiff = axs[3].plot(self.drive_amp_interval, self.r_diff(tomographic_curves)[0, :], label='rdiff')
+            td = axs[3].plot(self.drive_amp_interval, trace_difference(tomographic_curves)[0, :], label='td')
+            rdiff = axs[3].plot(self.drive_amp_interval, r_diff(tomographic_curves)[0, :], label='rdiff')
             axs[3].set_xlabel('drive amp')
             axs[0].set_title('X0 and X1 response')
             axs[1].set_title('Y0 and Y1 response')
@@ -120,12 +260,12 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
             plt.show()
             
             fig, axs = plt.subplots(2)
-            cmTD = axs[0].pcolormesh(X, Y, self.trace_difference(tomographic_curves), cmap='Greens')
+            cmTD = axs[0].pcolormesh(X, Y, trace_difference(tomographic_curves), cmap='Greens')
             axs[0].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[-1]])
             axs[0].set_ylabel('drive amp')
             axs[0].set_xlabel('pulse width')
             axs[0].set_title('trace distance between target tomography states')
-            cmRD = axs[1].pcolormesh(X, Y, self.r_diff(tomographic_curves), cmap='Greens')
+            cmRD = axs[1].pcolormesh(X, Y, r_diff(tomographic_curves), cmap='Greens')
             axs[1].set_ylim([self.drive_amp_interval[0], self.drive_amp_interval[-1]])
             axs[1].set_ylabel('drive amp')
             axs[1].set_xlabel('pulse width')
@@ -145,25 +285,7 @@ class CrossResonanceCalibration(AbstractCalibrationExperiment):
     def _fit_data(self, data, fit_routine=None, prior_estimates=None):
         pass
 
-    @staticmethod
-    def r_diff(tomo_arr):
-        """
-        returns the r-value curve given the two tomographic curves
-        """
-        return 0.5 * np.sqrt((tomo_arr[3, :, :] - tomo_arr[0, :, :]) ** 2 +
-                             (tomo_arr[4, :, :] - tomo_arr[1, :, :]) ** 2 +
-                             (tomo_arr[5, :, :] - tomo_arr[2, :, :]) ** 2
-                             )
-    
-    @staticmethod
-    def trace_difference(tomo_arr):
-        """
-        Calculate the trace difference between the two target qubit states
-        """
-        return 0.5 * (abs(tomo_arr[3, :, :] - tomo_arr[0, :, :]) +
-                      abs(tomo_arr[4, :, :] - tomo_arr[1, :, :]) +
-                      abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
-                      )
+
     
     def _make_circuits_echoed(self, crosstalk_drive_amp=0.01):
         circuits = OrderedDict()
