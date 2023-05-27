@@ -52,7 +52,7 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         for twidth_idx in range(len(self.pulse_width_interval)):
             for pauli_idx in range(6):
                 tomographic_curves[pauli_idx, twidth_idx] = \
-                    1-2 * np.average(data[twidth_idx*6+pauli_idx][self.target_qid], axis=1)[:, 0]
+                    1-2 * np.average(data[self.target_qid][twidth_idx*6+pauli_idx])
         self.tomographic_curves = tomographic_curves
 
         fig, axs = plt.subplots(4)
@@ -65,8 +65,8 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         axs[0].set_title('X0 and X1 response')
         axs[1].set_title('Y0 and Y1 response')
         axs[2].set_title('Z0 and Z1 response')
-        td = axs[3].plot(self.pulse_width_interval, trace_difference(tomographic_curves), label='td')
-        rdiff = axs[3].plot(self.pulse_width_interval, r_diff(tomographic_curves), label='rdiff')
+        td = axs[3].plot(self.pulse_width_interval, self.trace_difference(tomographic_curves), label='td')
+        rdiff = axs[3].plot(self.pulse_width_interval, self.r_diff(tomographic_curves), label='rdiff')
         axs[3].set_xlabel('pulse width')
 
         for i in range(4):
@@ -74,6 +74,24 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         plt.tight_layout()
 
         # fit = self._fit_data(data)
+        
+    @staticmethod
+    def r_diff(tomo_arr):
+        """
+        returns the r-value curve given the two tomographic curves
+        """
+        return 0.5 * np.sqrt((tomo_arr[3, :] - tomo_arr[0, :]) ** 2 +
+                             (tomo_arr[4, :] - tomo_arr[1, :]) ** 2 +
+                             (tomo_arr[5, :] - tomo_arr[2, :]) ** 2
+                             )
+    @staticmethod
+    def trace_difference(tomo_arr):
+        """
+        Calculate the trace difference between the two target qubit states
+        """
+        return 0.5 * (abs(tomo_arr[3, :] - tomo_arr[0, :]) +
+                      abs(tomo_arr[4, :] - tomo_arr[1, :]) +
+                      abs(tomo_arr[5, :] - tomo_arr[2, :]))
 
     def _make_circuits_echoed(self, crosstalk_drive_amp=0.01):
         circuits = []
