@@ -5,6 +5,56 @@ from collections import OrderedDict
 from qubic.job_manager_jpm import JobManager
 import numpy as np
 
+from scipy.optimize import curve_fit
+
+
+def get_omega(eDelta, eOmega_x, eOmega_y):
+    """Return \Omega from parameter arguments."""
+    eOmega = np.sqrt(eDelta ** 2 + eOmega_x ** 2 + eOmega_y ** 2)
+    return eOmega
+
+
+def avg_X(t, eDelta, eOmega_x, eOmega_y):
+    """Return average X Pauli measurement vs time t"""
+    eOmega = get_omega(eDelta, eOmega_x, eOmega_y)
+    eXt = (-eDelta * eOmega_x + eDelta * eOmega_x * np.cos(eOmega * t) + \
+           eOmega * eOmega_y * np.sin(eOmega * t)) / eOmega ** 2
+    return eXt
+
+
+def avg_Y(t, eDelta, eOmega_x, eOmega_y):
+    """Return average Y Pauli measurement vs time t"""
+    eOmega = get_omega(eDelta, eOmega_x, eOmega_y)
+    eYt = (eDelta * eOmega_y - eDelta * eOmega_y * np.cos(eOmega * t) - \
+           eOmega * eOmega_x * np.sin(eOmega * t)) / eOmega ** 2
+    return eYt
+
+
+def avg_Z(t, eDelta, eOmega_x, eOmega_y):
+    """Return average Z Pauli measurement vs time t"""
+    eOmega = get_omega(eDelta, eOmega_x, eOmega_y)
+    eZt = (eDelta ** 2 + (eOmega_x ** 2 + eOmega_y ** 2) * np.cos(eOmega * t)) / eOmega ** 2
+    return eZt
+
+
+def rt_evol(ts, eDelta, eOmega_x, eOmega_y):
+    """Stack average X,Y,Z Pauli measurements vertically."""
+    return np.vstack([avg_X(ts, eDelta, eOmega_x, eOmega_y), \
+                      avg_Y(ts, eDelta, eOmega_x, eOmega_y), \
+                      avg_Z(ts, eDelta, eOmega_x, eOmega_y)])
+
+
+def rt_flat(ts, eDelta, eOmega_x, eOmega_y):
+    """Flatten X,Y,Z Pauli measurement data into 1D array."""
+    return rt_evol(ts[0:len(ts) // 3], eDelta, eOmega_x, eOmega_y).flatten()
+
+
+def fit_rt_evol(ts, eXt, eYt, eZt, p0):
+    """Use curve_fit to determine fit parameters of X,Y,Z Pauli measurements together."""
+    rt_vec = np.asarray([eXt, eYt, eZt])
+
+    return curve_fit(rt_flat, np.tile(ts, 3), rt_vec.flatten(), p0=p0, method='trf')
+
 
 def r_diff(tomo_arr):
     """
@@ -15,6 +65,7 @@ def r_diff(tomo_arr):
                          (tomo_arr[5, :, :] - tomo_arr[2, :, :]) ** 2
                          )
 
+
 def trace_difference(tomo_arr):
     """
     Calculate the trace difference between the two target qubit states
@@ -23,6 +74,26 @@ def trace_difference(tomo_arr):
                   abs(tomo_arr[4, :, :] - tomo_arr[1, :, :]) +
                   abs(tomo_arr[5, :, :] - tomo_arr[2, :, :])
                   )
+
+
+def get_interation_rates(ground_fit, excited_fit):
+    """Determine interaction rates from fits to ground and excited control qubit data."""
+    Delta0 = ground_fit[0]
+    Omega0_x = ground_fit[1]
+    Omega0_y = ground_fit[2]
+    Delta1 = excited_fit[0]
+    Omega1_x = excited_fit[1]
+    Omega1_y = excited_fit[2]
+
+    rates = dict()
+    rates['IX'] = 0.5 * (Omega0_x + Omega1_x)
+    rates['IY'] = 0.5 * (Omega0_y + Omega1_y)
+    rates['IZ'] = 0.5 * (Delta0 + Delta1)
+    rates['ZX'] = 0.5 * (Omega0_x - Omega1_x)
+    rates['ZY'] = 0.5 * (Omega0_y - Omega1_y)
+    rates['ZZ'] = 0.5 * (Delta0 - Delta1)
+
+    return rates
 
 class CrossResonanceTomography(): #AbstractTomographyExperiment
     def __init__(self, control_qid, target_qid, pulse_width_interval, drive_amp, pulse_type='std'):
@@ -39,6 +110,11 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
             self.circuits = self._make_circuits_echoed()
         self.estimated_hamiltonian_params = None
 
+        self.prior_fits = [
+            [0, 0, 0.0001],
+            [0.001, 0.001, 0.0000001]
+        ]
+
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
         """
         run the experiment and report
@@ -54,6 +130,14 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
                 tomographic_curves[pauli_idx, twidth_idx] = \
                     1-2 * np.average(data[self.target_qid][twidth_idx*6+pauli_idx])
         self.tomographic_curves = tomographic_curves
+
+
+        fits = self._fit_data(tomographic_curves, self.prior_fits)
+        self.fits = fits
+        print(fits)
+        rates = get_interation_rates(fits[0], fits[1])
+        self.rates = rates
+        print(rates)
 
         fig, axs = plt.subplots(4)
         axs[0].plot(self.pulse_width_interval, tomographic_curves[0, :], label='X0')
@@ -74,6 +158,16 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         plt.tight_layout()
 
         # fit = self._fit_data(data)
+
+    def _fit_data(self, tomographic_curves, prior_fits):
+        fit_ctl0 = fit_rt_evol(self.pulse_width_interval, tomographic_curves[0],
+                               tomographic_curves[1], tomographic_curves[2], prior_fits[0])
+
+        fit_ctl1 = fit_rt_evol(self.pulse_width_interval, tomographic_curves[3],
+                               tomographic_curves[4], tomographic_curves[5], prior_fits[1])
+        return [fit_ctl0, fit_ctl1]
+
+
         
     @staticmethod
     def r_diff(tomo_arr):
