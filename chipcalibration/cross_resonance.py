@@ -134,7 +134,7 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         fits = self._fit_data(tomographic_curves, self.prior_fits)
         self.fits = fits
         print(fits)
-        rates = get_interation_rates(fits[0], fits[1])
+        rates = get_interation_rates(fits[0][0], fits[1][0])
         self.rates = rates
         print(rates)
 
@@ -193,7 +193,7 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
                       abs(tomo_arr[4, :] - tomo_arr[1, :]) +
                       abs(tomo_arr[5, :] - tomo_arr[2, :]))
 
-    def _make_circuits_echoed(self, crosstalk_drive_amp=0.01):
+    def _make_circuits_echoed(self, crosstalk_drive_amp=0.0):
         circuits = []
         control_qubit = self.control_qid
         target_qubit = self.target_qid
