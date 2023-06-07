@@ -83,10 +83,10 @@ class RamseyExperiment(AbstractCalibrationExperiment):
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6, 'qubit': self.target_register})
             cur_circ.append(
-                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'fcarrier'): self.drive_frequency}})
+                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'freq'): self.drive_frequency}})
             cur_circ.append({'name': 'delay', 't': dtime, 'qubit': self.target_register})
             cur_circ.append(
-                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'fcarrier'): self.drive_frequency}})
+                {'name': 'X90', 'qubit': self.target_register, 'modi': {(0, 'freq'): self.drive_frequency}})
             cur_circ.append({'name': 'read', 'qubit': self.target_register})
             circuits.append(cur_circ)
         return circuits
