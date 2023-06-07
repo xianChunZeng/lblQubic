@@ -50,8 +50,8 @@ class MeasurementCalibration(AbstractCalibrationExperiment):
     def plot_results(self, fig):
         ax = fig.add_subplot(111)
         colormesh = ax.pcolormesh(self.amps, self.freqs, self.separations.T, cmap='cividis')
-        ax.colorbar(colormesh)
-        fig.title("Sigma separation as a function of amp and freq")
+        fig.colorbar(colormesh)
+        ax.set_title("Sigma separation as a function of amp and freq")
         ax.set_xlabel("amp")
         ax.set_ylabel("freq")
         ax.set_xlim([self.amps[0], self.amps[-1]])
