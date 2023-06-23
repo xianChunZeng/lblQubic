@@ -3,6 +3,8 @@ import pygsti
 import numpy as np
 
 from pygsti.modelpacks import smq1Q_XZ
+from pygsti.processors import QubitProcessorSpec
+
 
 
 from pyrpe.src.quapack.pyRPE.quantum import Q as RPE_Experiment
