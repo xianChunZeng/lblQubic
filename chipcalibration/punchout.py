@@ -121,8 +121,8 @@ class Punchout:
             for qubit in qubit_dict:
                 for freq in freqs[qubit]:
                     circuit.append({'name': 'delay', 't': RINGDOWN_TIME, 'qubit': [qubit]})
-                    circuit.append({'name': 'read', 'qubit': [qubit], 'modi': {(0, 'fcarrier'): freq, 
-                                                                               (1, 'fcarrier'): freq,
+                    circuit.append({'name': 'read', 'qubit': [qubit], 'modi': {(0, 'freq'): freq, 
+                                                                               (1, 'freq'): freq,
                                                                                (0, 'amp'): amp}})
             circuits.append(circuit)
     

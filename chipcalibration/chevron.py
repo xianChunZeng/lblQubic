@@ -37,7 +37,7 @@ class Chevron:
                 for qubit in qubits:
                     freq = qchip.qubits[qubit].freq + freqoffset
                     cur_circ.append({'name': 'rabi', 'qubit': [qubit], 
-                                     'modi': {(0, 'twidth'): twidth, (0, 'fcarrier'): freq}})
+                                     'modi': {(0, 'twidth'): twidth, (0, 'freq'): freq}})
                     cur_circ.append({'name': 'read', 'qubit': [qubit]})
                 cur_circ.append({'name': 'delay', 't': 400.e-6})
             circuits.append(cur_circ)
