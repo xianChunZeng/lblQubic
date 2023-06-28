@@ -3,19 +3,28 @@ import pygsti
 import numpy as np
 
 
+
 from pyrpe.src.quapack.pyRPE.quantum import Q as RPE_Experiment
 from pyrpe.src.quapack.pyRPE import RobustPhaseEstimation
 
 import qubic.pygsti.qupig as _qpig
 
-class RPE_XR_Experiment:
+def rectify_angle(theta):
+    if theta > np.pi:
+        theta -= 2*np.pi
+    return theta
+
+class CR_RPE_Experiment:
     """
-    RPE XR experiment class.  
+    RPE CR experiment class.  
     This class is used to generate the circuits for the RPE XR experiment and to
     run them on the QPU.
     """
 
-    def __init__(self, control_qubit, target_qubit, max_max_depth=7):
+    def __init__(self, control_qubit, target_qubit, calibration, max_max_depth=7):
+        self.calibration = calibration
+        self.target_qid = target_qubit
+        self.control_qid = control_qubit
         self.register = [control_qubit, target_qubit]
         if type(max_max_depth) is int:
             self.max_depths = [2 ** i for i in range(max_max_depth)]
@@ -27,18 +36,20 @@ class RPE_XR_Experiment:
                             ('sin','+'):'00', ('sin','-'):'10'},
                      (1,3):{('cos','+'):'11', ('cos','-'):'10',
                             ('sin','+'):'00', ('sin','-'):'01'}}
+        
+        self.state_pairs = list(self.state_pair_lookup.keys())
         self._make_pygsti_circuits()
-        self.circuits = self.all_circuits_needing_data()
+        self.pygsti_circuits = self.all_pygsti_circuits_needing_data()
+        self.qubic_instructions = {circ : self.transpile_qubic_instructions(circ, calibration) for circ in self.pygsti_circuits}
 
-    def run_and_report(self,  pygsti_jobmanager, num_shots_per_circuit, qchip):
-        ds = self._collect_data(pygsti_jobmanager, num_shots_per_circuit, qchip)
-        self.ds = ds
-    
+    def run(self,  pygsti_jobmanager, num_shots_per_circuit, qchip):
+        self.ds = pygsti_jobmanager.collect_dataset(self.qubic_instructions, num_shots_per_circuit, qchip)
+                                                    
     def rpe_circuits(self):
         return {circ: _qpig.qubic_instructions_from_pygsti_circuit(circ, self.register)
                 for circ in self.all_circuits_needing_data}
 
-    def all_circuits_needing_data(self):
+    def all_pygsti_circuits_needing_data(self):
         all_circs = []
         for trig_dict in [self.sin_dict, self.cos_dict]:
             for state_pair in self.state_pair_lookup.keys():
@@ -96,29 +107,137 @@ class RPE_XR_Experiment:
 
     def _make_pygsti_circuits(self):
         state_pairs = [(0,2), (1,2), (1,3)]
-        self.sin_dict = {state_pair: {i: self.make_sin_circuit(i,state_pair, self.register) for i in self.max_depths} for state_pair in state_pairs}
-        self.cos_dict = {state_pair: {i: self.make_cos_circuit(i,state_pair, self.register) for i in self.max_depths} for state_pair in state_pairs}
+        self.sin_dict = {state_pair: {i: self.make_sin_circuit(i,state_pair) for i in self.max_depths} for state_pair in state_pairs}
+        self.cos_dict = {state_pair: {i: self.make_cos_circuit(i,state_pair) for i in self.max_depths} for state_pair in state_pairs}
+        
+    def make_cr_pulse(self, calibration, phase_offset=0):
+        return [
+            {
+            'name': 'pulse',
+            "freq": f"{self.target_qid}.freq",
+            "dest": f"{self.control_qid}.qdrv",
+            "twidth": calibration['twidth']/2.0,
+            "amp": calibration['c_amp'],
+            "phase": calibration['c_phase'] + phase_offset,
+            "env": [
+                {
+                    "env_func": "cos_edge_square",
+                    "paradict": {
+                        "ramp_fraction": 0.25,
+                    }
+                }
+            ]
+        }, {
+            'name': 'pulse',
+            "freq": f"{self.target_qid}.freq",
+            "dest": f"{self.target_qid}.qdrv",
+            "twidth": calibration['twidth']/2.0,
+            "amp": calibration['t_amp'],
+            "phase": calibration['t_phase'] + phase_offset, 
+            "env": [
+                {
+                    "env_func": "cos_edge_square",
+                    "paradict": {
+                        "ramp_fraction": 0.25,
+                    }
+                }
+            ]
+            }, {'name': 'barrier'}
+        ]
+    
+    def make_echoed_cr_pulse_schedule(self, calibration):
+        circ = self.make_cr_pulse(calibration)
+        circ.append({'name': 'delay', 't': 10.e-9})
+        circ.append({'name': 'X90', 'qubit': [self.control_qid]})
+        circ.append({'name': 'X90', 'qubit': [self.control_qid]})
+        circ.append({'name': 'barrier'})
+        circ.append({'name': 'delay', 't': 10.e-9})
+        circ.extend(self.make_cr_pulse(calibration, np.pi))
+        circ.append({'name': 'X90', 'qubit': [self.control_qid]})
+        circ.append({'name': 'X90', 'qubit': [self.control_qid]})
+        circ.append({'name': 'barrier'})
+        return circ
+        
+    def transpile_qubic_instructions(self, pygsti_circuit, cr_calibration):
+        """
+        converts the pygsti circuit into qubic instructions
+        
+        """
+        qubic_circuit = list()
+        qubic_circuit.append({'name': 'delay', 't': 400.e-6})
+        for layer in pygsti_circuit:
+            if layer.name == 'Gcr':
+                qubic_circuit.extend( self.make_echoed_cr_pulse_schedule(cr_calibration))
+            else:
+                qubic_circuit.extend(_qpig.parse_layer(layer))
+            qubic_circuit.append({'name': 'barrier', 'qubit': list(self.register)})
+        for qid in self.register:
+            qubic_circuit.append({'name': 'read', 'qubit': [qid]}, )
+        return qubic_circuit
+            
 
 
 
     def _collect_data(self, pygsti_jobmanager, num_shots_per_circuit, qchip):
         return pygsti_jobmanager.collect_dataset(self.circuits, num_shots_per_circuit, qchip=qchip)
 
- 
- class CR_RPE_Analyzer:
+class CR_RPE_Analyzer:
     """
     Class for analyzing the results of a CR-RPE experiment
     """
-    def __init__(self, max_depths, sin_circs, cos_circs):
-        pass
+    def __init__(self, cr_rpe_exp: CR_RPE_Experiment):
+        self.experiment = cr_rpe_exp
+        self.state_pairs = cr_rpe_exp.state_pairs
+        self.state_pair_lookup = cr_rpe_exp.state_pair_lookup
+        self.max_depths = cr_rpe_exp.max_depths
+        self.sin_dict = cr_rpe_exp.sin_dict
+        self.cos_dict = cr_rpe_exp.cos_dict
+
 
     def process_rpe(self, dataset):
-        # Post-process the RPE data from the pyGSTi dataset
-        the_experiment = RPE_Experiment()
-        for i in self.max_depths:
-            the_experiment.process_sin(i, (int(dataset[self.sin_circs[i]]['00']), int(dataset[self.sin_circs[i]]['01'])))
-            the_experiment.process_cos(i, (int(dataset[self.cos_circs[i]]['00']), int(dataset[self.cos_circs[i]]['01'])))
-        return RobustPhaseEstimation(the_experiment)
+        #Post-process the RPE data from the pyGSTi dataset
+        the_experiments = {}
+        analyses = {}
+        for state_pair in self.state_pairs:
+            the_experiments[state_pair] = RPE_Experiment()
+
+        for state_pair in self.state_pairs:
+            cos_plus = self.state_pair_lookup[state_pair]['cos','+']
+            cos_minus = self.state_pair_lookup[state_pair]['cos','-']
+            sin_plus = self.state_pair_lookup[state_pair]['sin','+']
+            sin_minus = self.state_pair_lookup[state_pair]['sin','-']
+            for i in self.max_depths:
+                the_experiments[state_pair].process_sin(i,(int(dataset[self.sin_dict[state_pair][i]][sin_plus]),
+                                                        int(dataset[self.sin_dict[state_pair][i]][sin_minus])))
+                the_experiments[state_pair].process_cos(i,(int(dataset[self.cos_dict[state_pair][i]][cos_plus]),
+                                                        int(dataset[self.cos_dict[state_pair][i]][cos_minus])))
+        for state_pair in self.state_pairs:
+            analyses[state_pair] = RobustPhaseEstimation(the_experiments[state_pair])
+
+        last_good_estimate_generations = {}
+
+        for state_pair in self.state_pairs:
+            last_good_estimate_generations[state_pair] = analyses[(state_pair)].check_unif_local(historical=True)
+
+        last_good_estimate_generation = min(list(last_good_estimate_generations.values()))
+        print('Generation of last good estimate: ', last_good_estimate_generation)
+
+        #Now shift angles into correct principle range.
+        for state_pair in self.state_pairs:
+            if state_pair in [(1,2),(1,3)]:#If you're getting funny results for your (0,2) pair estimate, try including (0,2) here as well.
+                analyses[state_pair].angle_estimates = [rectify_angle(theta) for theta in analyses[state_pair].angle_estimates]#rectify_angle(analyses[state_pair].angle_estimates)
+
+        #Turn lin. comb. estimates into direct phase estimates.
+        theta_ix_estimates = 0.5 * (np.array(analyses[(0,2)].angle_estimates) + np.array(analyses[(1,3)].angle_estimates))
+        theta_zx_estimates = 0.5 * (np.array(analyses[(0,2)].angle_estimates) - np.array(analyses[(1,3)].angle_estimates))
+        theta_zi_estimates = np.array(analyses[(1,2)].angle_estimates)+theta_zx_estimates
+
+        #Get final trusted estimates:
+        #What are the actual phase estimates (in radians) for all depths?
+        print(f'Trusted theta_ix : {theta_ix_estimates[last_good_estimate_generation]}')
+        print(f'Trusted theta_zx : {theta_zx_estimates[last_good_estimate_generation]}')
+        print(f'Trusted theta_zi : {theta_zi_estimates[last_good_estimate_generation]}')
+
 
     def plot_rpe_verbose(self, dataset, num_shots, rpe_results):
         # 1st process the dataset -- probably should design so that I don't have to process every time
