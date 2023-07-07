@@ -110,14 +110,22 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         self.estimated_hamiltonian_params = None
 
         self.prior_fits = [
-            [0, 0, 0.0001],
-            [0.001, 0.001, 0.0000001]
+            [2e8, 2e8, 2e8],
+            [2e8, 2e8, 2e8]
         ]
 
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
         """
         run the experiment and report
         """
+        self.run(jobmanager, num_shots_per_circuit, qchip)
+        self.report()
+
+        
+
+        # fit = self._fit_data(data)
+        
+    def run(self, jobmanager, num_shots_per_circuit, qchip):
         data = self._collect_data(jobmanager, num_shots_per_circuit, qchip)
         self.data = data
         # tomographic curves of the target qubit for analysis and plotting
@@ -133,12 +141,13 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
 
         fits = self._fit_data(tomographic_curves, self.prior_fits)
         self.fits = fits
-        print(fits)
         rates = get_interation_rates(fits[0][0], fits[1][0])
         self.rates = rates
-        print(rates)
-
+        
+    def report(self):
         fig, axs = plt.subplots(4)
+        tomographic_curves = self.tomographic_curves
+        fits = self.fits
 
         # scatter plots of collected data
         axs[0].scatter(self.pulse_width_interval, tomographic_curves[0, :], label='X0')
@@ -149,8 +158,12 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         axs[2].scatter(self.pulse_width_interval, tomographic_curves[5, :], label='Z1')
 
         # plots of predicted curves with extracted Hamiltonian rates
-        axs[0].scatter(self.pulse_width_interval,  avg_X(self.pulse_width_interval, *fits[0][0]))
-        axs[0].scatter(self.pulse_width_interval, avg_X(self.pulse_width_interval, *fits[1][0]))
+        axs[0].plot(self.pulse_width_interval,  avg_X(self.pulse_width_interval, *fits[0][0]))
+        axs[0].plot(self.pulse_width_interval, avg_X(self.pulse_width_interval, *fits[1][0]))
+        axs[1].plot(self.pulse_width_interval,  avg_Y(self.pulse_width_interval, *fits[0][0]))
+        axs[1].plot(self.pulse_width_interval, avg_Y(self.pulse_width_interval, *fits[1][0]))
+        axs[2].plot(self.pulse_width_interval,  avg_Z(self.pulse_width_interval, *fits[0][0]))
+        axs[2].plot(self.pulse_width_interval, avg_Z(self.pulse_width_interval, *fits[1][0]))
 
         axs[0].set_title('X0 and X1 response')
         axs[1].set_title('Y0 and Y1 response')
@@ -162,9 +175,9 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
         for i in range(4):
             axs[i].legend()
         plt.tight_layout()
-
-        # fit = self._fit_data(data)
-
+            
+            
+            
     def _fit_data(self, tomographic_curves, prior_fits):
         fit_ctl0 = fit_rt_evol(self.pulse_width_interval, tomographic_curves[0],
                                tomographic_curves[1], tomographic_curves[2], prior_fits[0])
@@ -262,6 +275,10 @@ class CrossResonanceTomography(): #AbstractTomographyExperiment
                                           (1, 'twidth'): twidth,
                                           (0, 'amp'): self.drive_amp,
                                           (1, 'amp'): crosstalk_drive_amp}})
+                    if axis == 'X':
+                            circ.append({'name': 'Y-90', 'qubit': [target_qubit]})
+                    elif axis == 'Y':
+                        circ.append({'name': 'X90', 'qubit': [target_qubit]})
                     circ.append({'name': 'read', 'qubit': [control_qubit]})
                     circ.append({'name': 'read', 'qubit': [target_qubit]})
                     circuits.append(circ)
