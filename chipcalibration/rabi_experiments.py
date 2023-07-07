@@ -64,7 +64,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         """
         circuits = []
         for qid in self.target_register:
-            if self.drive_amplitude is not None:
+            if self.drive_amplitude is None:
                 drive_amplitude = qchip.gates['{}rabi'.format(qid)].contents[0].amp
             else:
                 drive_amplitude = self.drive_amplitude
@@ -75,7 +75,7 @@ class GMMRabi(AbstractCalibrationExperiment):
                     pass
                 else: 
                     cur_circ.append({'name': 'rabi', 'qubit': [qid],
-                                 'modi': {(0, 'twidth'): twidth}, (0, 'amp'): drive_amplitude})
+                                 'modi': {(0, 'twidth'): twidth, (0, 'amp'): drive_amplitude}})
                 cur_circ.append({'name': 'barrier', 'qubit': self.target_register})
                 for qid_read in self.target_register:
                     cur_circ.append({'name': 'read', 'qubit': [qid_read]})
