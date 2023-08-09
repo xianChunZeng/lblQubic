@@ -203,7 +203,7 @@ class TimeRabi(AbstractCalibrationExperiment):
                 pass
             else: 
                 cur_circ.append({'name': 'rabi', 'qubit': self.target_register,
-                             'modi': {(0, 'twidth'): twidth}, (0, 'amp'): self.drive_amplitude})
+                             'modi': {(0, 'twidth'): twidth, (0, 'amp'): self.drive_amplitude}})
             cur_circ.append({'name': 'barrier', 'qubit': self.readout_register})
             for qid in self.readout_register:
                 cur_circ.append({'name': 'read', 'qubit': [qid]})

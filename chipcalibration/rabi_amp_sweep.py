@@ -106,7 +106,7 @@ class RabiAmpSweeper:
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
             print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
-            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self._assembled_circuits[drive_qid], num_samples)['s11']
+            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self.circuits[drive_qid], num_samples)['s11']
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """

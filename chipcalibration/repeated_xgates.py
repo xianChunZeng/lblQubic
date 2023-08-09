@@ -3,7 +3,6 @@ import pdb
 import matplotlib.pyplot as plt
 import numpy as np
 from abc import ABC
-from pygsti.circuits import Circuit
 from collections import OrderedDict
 from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 import logging
