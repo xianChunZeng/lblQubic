@@ -18,4 +18,5 @@ log*
 *.npz
 *.swp
 *egg-info
+.idea/
 .ipynb_checkpoints/
