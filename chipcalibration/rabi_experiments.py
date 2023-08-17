@@ -356,5 +356,3 @@ class AmpRabi(AbstractCalibrationExperiment):
     def update_gmm_manager(self, gmm_manager):
         pass
 
-    def update_qchip(self, qchip):
-        pass
