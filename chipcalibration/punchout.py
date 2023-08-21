@@ -140,9 +140,7 @@ class Punchout:
                 number of shots per frequency
         """
     
-        # compile first circuit and load all memory
-        circuit_runner.load_circuit(self.raw_asm_progs[0])
-    
+        # compile first circuit and load all memory 
         nfreq = len(self.freqs[self.qubits[0]])
         s11 = {qubit: np.zeros((len(self.attens), nfreq), dtype=np.complex128) for qubit in self.chanmap.keys()}    
         s11_raw = circuit_runner.run_circuit_batch(self.raw_asm_progs, n_samples, nfreq, delay_per_shot=RINGDOWN_TIME*1.25*nfreq,
