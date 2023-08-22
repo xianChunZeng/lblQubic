@@ -40,7 +40,7 @@ class GMMRabi(AbstractCalibrationExperiment):
                 axs[idx].set_title(f'{qid}')
                 rchan = str(self.readout_chanmap[qid])
                 axs[idx].scatter(data[rchan].real, data[rchan].imag, c=self.shots[qid], cmap='viridis')
-            plt.tight_layout()
+            #plt.tight_layout()
             plt.show()
             fig, axs = plt.subplots(len(self.target_register))
             if len(self.target_register) == 1:
@@ -49,7 +49,7 @@ class GMMRabi(AbstractCalibrationExperiment):
                 axs[idx].set_title(f'{qid}')
                 rchan = str(self.readout_chanmap[qid])
                 axs[idx].hexbin(data[rchan].real, data[rchan].imag)
-            plt.tight_layout()
+            #plt.tight_layout()
             plt.show()
 
            
