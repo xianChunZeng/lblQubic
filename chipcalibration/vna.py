@@ -27,14 +27,13 @@ class Vna(AbstractCalibrationExperiment):
         self._circuits = []
         for freq in self.freqs:
             circuit = [{'name': 'delay', 't': RINGDOWN_TIME},
+                       #{'name': 'barrier', 'scope': [f'{self.qubit}.rdrv', f'{self.qubit}.rdlo']},
                        {'name': 'pulse', 'amp': self.drive_amp, 'freq': freq, 'phase': 0, 'dest': f'{self.qubit}.rdrv',
                         'env': {
                                 "env_func": "cos_edge_square",
                                 "paradict": {"ramp_fraction": 0.25}}, 'twidth': self.integration_time},
-
-                       {'name': 'barrier', 'scope': [f'{self.qubit}.rdrv', f'{self.qubit}.rdlo']},
-                       {'name': 'delay', 'scope': [f'{self.qubit}.rdlo']},
-                       {'name': 'pulse', 'amp': self.drive_amp, 'freq': freq, 'phase': 0, 'dest': f'{self.qubit}.rdlo',
+                       {'name': 'delay', 't': 600.e-9, 'scope': [f'{self.qubit}.rdlo']},
+                       {'name': 'pulse', 'amp': 1, 'freq': freq, 'phase': 0, 'dest': f'{self.qubit}.rdlo',
                         'env': {
                             "env_func": "square",
                             "paradict": { "phase": 0.0, "amplitude": 1.0}}, 'twidth': self.integration_time}]
@@ -47,14 +46,27 @@ class Vna(AbstractCalibrationExperiment):
         else:
             nshots = self.nsamples
 
-        s11 = jobmanager.build_and_run_circuits(self._circuits, nshots, outputs=['s11'], reload_env=False)
+        s11 = jobmanager.build_and_run_circuits(self._circuits, nshots, outputs=['s11'], reload_env=False)['s11']
         s11 = list(s11.values())[0]
-        s11_avg = np.average(s11, axis=1)
+        s11_avg = np.squeeze(np.average(s11, axis=1))
 
         phase = detrend(np.unwrap(np.angle(s11_avg)))
         amp = np.abs(s11_avg)
 
-        return amp, phase, s11_avg
+        self._results = {'amp': amp, 'phase': phase, 's11': s11_avg}
+
+    @property
+    def results(self):
+        return self._results
+
+    def plot_results(self, fig):
+        pass
+
+    def update_qchip(self, qchip):
+        pass
+
+    def update_gmm_manager(self, gmm_manager):
+        pass
 
 
 
