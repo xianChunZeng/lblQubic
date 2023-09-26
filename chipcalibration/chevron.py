@@ -12,10 +12,13 @@ class Chevron:
     """
 
     def __init__(self, qubits, freqspan, nfreq, pulse_widths, qchip, fpga_config, 
-                 channel_configs, centerfreq=None, ef=False, ef_rotate_back=False):
+                 channel_configs, centerfreq=None, ef=False, ef_rotate_back=False
+                 ,rabigate='rabi'
+                 ):
         """
         Create chevron circuits according to input parameters, then compile to asm binaries.
         """
+        self.rabigate=rabigate
         self.circuits = self._make_chevron_circuits(qubits, freqspan, nfreq, pulse_widths, 
                                                     qchip, centerfreq, ef, ef_rotate_back)
         self.qubits = qubits
@@ -32,6 +35,7 @@ class Chevron:
         delay is inserted between each measurement.
         """
         circuits = []
+        self.centerfreq={}
         self.freqoffsets = np.linspace(-freqspan/2, freqspan/2, nfreq)
         self.pulse_widths = pulse_widths
         for twidth in pulse_widths:
@@ -46,11 +50,12 @@ class Chevron:
                         centerfreq = initial_centerfreq
                         if len(qubits) > 0:
                             logging.getLogger(__name__).warning(f'All qubits will be set to f = {centerfreq}')
+                    self.centerfreq[qubit]=centerfreq
                     if ef:
                         cur_circ.append({'name': 'X90', 'qubit': [qubit]})
                         cur_circ.append({'name': 'X90', 'qubit': [qubit]})
                     freq = centerfreq + freqoffset
-                    cur_circ.append({'name': 'rabi', 'qubit': [qubit], 
+                    cur_circ.append({'name': self.rabigate, 'qubit': [qubit], 
                                      'modi': {(0, 'twidth'): twidth, (0, 'freq'): freq}})
                     if ef_rotate_back:
                         cur_circ.append({'name': 'X90', 'qubit': [qubit]})

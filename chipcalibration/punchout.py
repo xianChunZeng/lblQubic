@@ -26,7 +26,7 @@ class PunchoutGUI:
     Implements clickable GUI for selecting resonator power/freq
     """
 
-    def __init__(self, freqs, attens, s11, qubitid=None):
+    def __init__(self, freqs, attens, s11, qubitid=None,califreq=None,caliamp=None):
         """
         Parameters
         ----------
@@ -51,6 +51,10 @@ class PunchoutGUI:
         self.sub[0, 1].pcolormesh(freqs, -attens, phase)
         self.sub[1, 0].pcolormesh(freqs[:-1], -attens, np.diff(20*np.log10(amp), axis=1))
         self.sub[1, 1].pcolormesh(freqs[:-1], -attens, np.diff(phase, axis=1))
+        for i in [0,1]:
+            for j in [0,1]:
+                self.sub[i,j].axhline(y=20*np.log10(caliamp),color='black',alpha=0.3)
+                self.sub[i,j].axvline(x=califreq,color='black',alpha=0.3)
         self.fig1.canvas.mpl_connect('button_press_event', self.on_click)
         print('Click any plot to select desired resonator attenuation and frequency. If this is not a resonator, click outside the plot to remove from config')
         plt.show()
@@ -151,12 +155,14 @@ class Punchout:
 
         self.s11 = s11
 
-    def run_punchout_gui(self):
+    def run_punchout_gui(self,qchip):
         self.optimal_freq = {}
         self.optimal_atten = {}
         self.cal_gui = {}
         for qubit in self.qubits:
-            self.cal_gui[qubit] = PunchoutGUI(self.freqs[qubit], self.attens, self.s11[qubit], qubit)
+            self.cal_gui[qubit] = PunchoutGUI(self.freqs[qubit], self.attens, self.s11[qubit], qubit
+                ,califreq=qchip.qubits[qubit].readfreq,caliamp= qchip.gates[qubit + 'read'].contents[0].amp
+                )
             self.optimal_freq[qubit] = self.cal_gui[qubit].freq
             self.optimal_atten[qubit] = self.cal_gui[qubit].atten
 

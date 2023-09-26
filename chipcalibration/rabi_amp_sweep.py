@@ -29,7 +29,7 @@ class RabiAmpSweeper:
 
     """
 
-    def __init__(self, register, twidth_target, qchip, fpga_config, channel_configs, amp_range=(0.0, 1.0), num_partitions=100):
+    def __init__(self, register, twidth_target, qchip, fpga_config, channel_configs, amp_range=(0.0, 1.0), num_partitions=100,rabigate='rabi'):
         """
         Create rabi amplitude circuits according to input parameters, then compile to asm binaries.
         """
@@ -48,6 +48,7 @@ class RabiAmpSweeper:
         
         self._set_amplitude_partitions(amp_range[0], amp_range[1], num_partitions) 
         self.circuits = OrderedDict() # a batch of circuits for each target drive qubit
+        self.rabigate=rabigate
         for qid in register:
             self.circuits[qid] = self._make_rabi_circuits(qid)
 
@@ -61,7 +62,7 @@ class RabiAmpSweeper:
         for amp in self.amplitudes:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
-            cur_circ.append({'name': 'rabi', 'qubit': [drvqubit], 'modi': {(0, 'amp'): amp, (0, 'twidth') : self.twidth}})
+            cur_circ.append({'name': self.rabigate, 'qubit': [drvqubit], 'modi': {(0, 'amp'): amp, (0, 'twidth') : self.twidth}})
             cur_circ.append({'name': 'barrier', 'qubit': self.register})
             for qid in self.register:
                     cur_circ.append({'name': 'read', 'qubit': [qid]})
@@ -235,8 +236,8 @@ class RabiAmpSweeper:
 #         self.state_disc_shots = self.gmm_manager.predict(self.raw_shots)
 #         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit],axis=1) for qubit in self.state_disc_shots.keys()}
 #         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0,axis=1) for qubit in self.state_disc_shots.keys()}
-    def update_qchip(self, qchip):
+    def update_qchip(self, qchip,x90gate='X90'):
         cal_drive_amps = {qid: self.fits[qid][0][2]/4 for qid in self.register} #1/4 the drive period for each qubit
         for qid in self.register:
-            qchip.gates[qid + 'X90'].contents[0].amp = cal_drive_amps[qid]
-            qchip.gates[qid + 'X90'].contents[0].twidth = self.twidth
+            qchip.gates[qid + x90gate].contents[0].amp = cal_drive_amps[qid]
+            qchip.gates[qid + x90gate].contents[0].twidth = self.twidth

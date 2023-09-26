@@ -13,13 +13,14 @@ class GMMRabi(AbstractCalibrationExperiment):
     Time Rabi experiments to construct GMM Managers for the register
     """
     def __init__(self, target_qubits, pulse_width_interval,
-                 channel_configs, drive_amplitude=None):
+                 channel_configs, drive_amplitude=None,rabigate='rabi'):
         self.target_register = target_qubits
         self.gmm_manager = GMMManager(chanmap_or_chan_cfgs=channel_configs)
         self.readout_chanmap = {qubit: channel_configs[qubit + '.rdlo'].core_ind for qubit in self.target_register}
 
         self.drive_amplitude = drive_amplitude
         self.pulse_widths = pulse_width_interval
+        self.rabigate=rabigate
 
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip, plotting=True):
         """
@@ -65,7 +66,7 @@ class GMMRabi(AbstractCalibrationExperiment):
         circuits = []
         for qid in self.target_register:
             if self.drive_amplitude is None:
-                drive_amplitude = qchip.gates['{}rabi'.format(qid)].contents[0].amp
+                drive_amplitude = qchip.gates['{}'.format(qid)+self.rabigate].contents[0].amp
             else:
                 drive_amplitude = self.drive_amplitude
             for twidth in self.pulse_widths:
@@ -74,7 +75,7 @@ class GMMRabi(AbstractCalibrationExperiment):
                 if twidth == 0: 
                     pass
                 else: 
-                    cur_circ.append({'name': 'rabi', 'qubit': [qid],
+                    cur_circ.append({'name': self.rabigate, 'qubit': [qid],
                                  'modi': {(0, 'twidth'): twidth, (0, 'amp'): drive_amplitude}})
                 cur_circ.append({'name': 'barrier', 'qubit': self.target_register})
                 for qid_read in self.target_register:
@@ -109,7 +110,7 @@ class TimeRabi(AbstractCalibrationExperiment):
     Time Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval):
+    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval,rabigate='rabi'):
         if type(target_qubit) is not list:
             target_qubit = [target_qubit]
         if len(target_qubit) > 1:
@@ -120,6 +121,7 @@ class TimeRabi(AbstractCalibrationExperiment):
 
         self.pulse_widths = pulse_width_interval
 
+        self.rabigate=rabigate
         self.circuits = self._make_circuits()
         self.optimization_parameters = ['X90.twidth', 'X90.amp']
         self.final_estimated_params = None
@@ -131,6 +133,7 @@ class TimeRabi(AbstractCalibrationExperiment):
         will also create a GMM Manager along the way
         """
         self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
+        self.raw_IQ = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
         fit = self._fit_data(self.shots[self.target_register[0]], fit_type, period)
         self.fitted_rabi_period = fit[0][2]
         
@@ -181,11 +184,11 @@ class TimeRabi(AbstractCalibrationExperiment):
                 prior_fit_params[2] = period
             return curve_fit(self._cos, self.pulse_widths, average_response[:, 0], prior_fit_params)
         
-    def update_qchip(self, qchip):
+    def update_qchip(self, qchip,x90gate='X90'):
         if self.final_estimated_params is None:
             raise ValueError('Please run a Rabi experiment before updating the qchip')
-        qchip.gates[self.target_register[0]+'X90'].contents[0].amp = self.final_estimated_params[1]
-        qchip.gates[self.target_register[0]+'X90'].contents[0].twidth = self.final_estimated_params[0]
+        qchip.gates[self.target_register[0]+x90gate].contents[0].amp = self.final_estimated_params[1]
+        qchip.gates[self.target_register[0]+x90gate].contents[0].twidth = self.final_estimated_params[0]
         
         
 
@@ -202,7 +205,7 @@ class TimeRabi(AbstractCalibrationExperiment):
             if twidth == 0: 
                 pass
             else: 
-                cur_circ.append({'name': 'rabi', 'qubit': self.target_register,
+                cur_circ.append({'name': self.rabigate, 'qubit': self.target_register,
                              'modi': {(0, 'twidth'): twidth, (0, 'amp'): self.drive_amplitude}})
             cur_circ.append({'name': 'barrier', 'qubit': self.readout_register})
             for qid in self.readout_register:
@@ -237,7 +240,7 @@ class AmpRabi(AbstractCalibrationExperiment):
     Amplitude Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, amp_interval, target_pulse_width):
+    def __init__(self, target_qubit, readout_register, amp_interval, target_pulse_width,rabigate='rabi'):
         if type(target_qubit) is not list:
             target_qubit = [target_qubit]
         if len(target_qubit) > 1:
@@ -248,6 +251,7 @@ class AmpRabi(AbstractCalibrationExperiment):
 
         self.target_pulse_width = target_pulse_width
 
+        self.rabigate=rabigate
         self.circuits = self._make_circuits()
         self.optimization_parameters = ['X90.twidth', 'X90.amp']
         self.final_estimated_params = None
@@ -309,11 +313,11 @@ class AmpRabi(AbstractCalibrationExperiment):
                 prior_fit_params[2] = period
             return curve_fit(self._cos, self.amp_interval, average_response[:, 0], prior_fit_params)
         
-    def update_qchip(self, qchip):
+    def update_qchip(self, qchip,x90gate='X90'):
         if self.final_estimated_params is None:
             raise ValueError('Please run a Rabi experiment before updating the qchip')
-        qchip.gates[self.target_register[0]+'X90'].contents[0].amp = self.final_estimated_params[1]
-        qchip.gates[self.target_register[0]+'X90'].contents[0].twidth = self.final_estimated_params[0]
+        qchip.gates[self.target_register[0]+x90gate].contents[0].amp = self.final_estimated_params[1]
+        qchip.gates[self.target_register[0]+x90gate].contents[0].twidth = self.final_estimated_params[0]
         
         
 
@@ -330,7 +334,7 @@ class AmpRabi(AbstractCalibrationExperiment):
             if amp == 0:
                 pass
             else:
-                cur_circ.append({'name': 'rabi', 'qubit': self.target_register,
+                cur_circ.append({'name': self.rabigate, 'qubit': self.target_register,
                              'modi': {(0, 'twidth'): self.target_pulse_width}, (0, 'amp'): amp})
             cur_circ.append({'name': 'barrier', 'qubit': self.readout_register})
             for qid in self.readout_register:
