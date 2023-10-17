@@ -29,7 +29,7 @@ class RabiAmpSweeper:
 
     """
 
-    def __init__(self, register, twidth_target, qchip, fpga_config, channel_configs, amp_range=(0.0, 1.0), num_partitions=100,rabigate='rabi'):
+    def __init__(self, register, twidth_target, qchip, fpga_config, channel_configs, repeat=1, amp_range=(0.0, 1.0), num_partitions=100,rabigate='rabi'):
         """
         Create rabi amplitude circuits according to input parameters, then compile to asm binaries.
         """
@@ -39,6 +39,7 @@ class RabiAmpSweeper:
         self.num_partitions = num_partitions
         self.twidth = twidth_target
         self.qchip = qchip
+        self.repeat=repeat
         self.fpga_config = fpga_config
         self.channel_configs = channel_configs
         self.readout_chanmap = {qid : str(channel_configs[qid + '.rdlo'].core_ind) for qid in register}
@@ -50,9 +51,9 @@ class RabiAmpSweeper:
         self.circuits = OrderedDict() # a batch of circuits for each target drive qubit
         self.rabigate=rabigate
         for qid in register:
-            self.circuits[qid] = self._make_rabi_circuits(qid)
+            self.circuits[qid] = self._make_rabi_circuits(qid,repeat)
 
-    def _make_rabi_circuits(self, drvqubit):
+    def _make_rabi_circuits(self, drvqubit,repeat):
         """
         Make list of circuits used for rabi measurement. and the list of pulse width. So there will be a total of 
         1 circuits, each of which contains len(pulse_widths) measurements. A 400 us 
@@ -62,7 +63,8 @@ class RabiAmpSweeper:
         for amp in self.amplitudes:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
-            cur_circ.append({'name': self.rabigate, 'qubit': [drvqubit], 'modi': {(0, 'amp'): amp, (0, 'twidth') : self.twidth}})
+            for i in range(repeat):
+                cur_circ.append({'name': self.rabigate, 'qubit': [drvqubit], 'modi': {(0, 'amp'): amp, (0, 'twidth') : self.twidth}})
             cur_circ.append({'name': 'barrier', 'qubit': self.register})
             for qid in self.register:
                     cur_circ.append({'name': 'read', 'qubit': [qid]})
@@ -77,7 +79,7 @@ class RabiAmpSweeper:
                 
     
 
-    def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True):
+    def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True,qchip=None):
         """
         Run Rabi amplitude pulses on all the qubits and record the Xpi/2 gate times 
 
@@ -90,13 +92,13 @@ class RabiAmpSweeper:
                     [A, B, drive_period, phi] such that
                     one_state_pop = A*cos(2*pi*x/drive_period + phi) + B
         """
-        self._take_all_data(circuit_runner, num_samples)
+        self._take_all_data(circuit_runner, num_samples,qchip=qchip)
         self._fit_gmm()
         self._fit_count_data(prior_fit_params, use_fft)
 
         #self._fit_gmm()
 
-    def _take_all_data(self, job_manager, num_samples):
+    def _take_all_data(self, job_manager, num_samples,qchip=None):
         """
         Take all the data needed to fit the rabi oscillations on the register
 
@@ -107,7 +109,7 @@ class RabiAmpSweeper:
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
             print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
-            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self.circuits[drive_qid], num_samples)['s11']
+            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self.circuits[drive_qid], num_samples,qchip=self.qchip if qchip is None else qchip)['s11']
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """
@@ -236,8 +238,8 @@ class RabiAmpSweeper:
 #         self.state_disc_shots = self.gmm_manager.predict(self.raw_shots)
 #         self.ones_frac = {qubit: np.sum(self.state_disc_shots[qubit],axis=1) for qubit in self.state_disc_shots.keys()}
 #         self.zeros_frac = {qubit: np.sum(self.state_disc_shots[qubit] == 0,axis=1) for qubit in self.state_disc_shots.keys()}
-    def update_qchip(self, qchip,x90gate='X90'):
-        cal_drive_amps = {qid: self.fits[qid][0][2]/4 for qid in self.register} #1/4 the drive period for each qubit
+    def update_qchip(self, qchip,x90gate='X90',ratio=1.0):
+        cal_drive_amps = {qid: self.fits[qid][0][2]*self.repeat/4 for qid in self.register} #1/4 the drive period for each qubit
         for qid in self.register:
-            qchip.gates[qid + x90gate].contents[0].amp = cal_drive_amps[qid]
-            qchip.gates[qid + x90gate].contents[0].twidth = self.twidth
+            qchip.gates[qid + x90gate].contents[0].amp = cal_drive_amps[qid]*ratio
+            qchip.gates[qid + x90gate].contents[0].twidth = self.twidth/ratio
