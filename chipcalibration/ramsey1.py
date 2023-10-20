@@ -17,7 +17,9 @@ class ramsey:
         self.qubit = qubit
         self.delay_interval=delay_interval
         self.qchip=qchip
-    def ramsey(self, framsey_offset=None):        
+        self.fastreset=None
+    def ramsey(self, framsey_offset=None,fastreset=None):
+        self.fastreset=fastreset
         self.circuits = self._make_ramsey_circuits(framsey_offset=framsey_offset)
 
     def _make_ramsey_circuits(self,framsey_offset,delaybeforecircuit=600e-6):
@@ -32,17 +34,27 @@ class ramsey:
         circuits= []
         circuit=[]
         for tdelay in self.delay_interval:
-            circuit.append({'name': 'delay', 't': delaybeforecircuit, 'qubit': self.qubit})
+            if self.fastreset is not None:
+                for i in range(self.fastreset):
+                    circuit.append({'name': 'read', 'qubit': self.qubit})
+                    circuit.append({'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': '%s.meas'%self.qubit, 'scope': [self.qubit],
+                     'true': [{'name': 'X90', 'qubit':self.qubit},{'name': 'X90', 'qubit':self.qubit}],
+                     'false': []})
+            else:
+                circuit.append({'name': 'delay', 't': delaybeforecircuit, 'qubit': self.qubit})
             circuit.append({'name': 'X90', 'qubit': self.qubit ,'modi':{(0,'freq'):fqdrv}})
             circuit.append({'name': 'delay', 't': tdelay, 'qubit': self.qubit})
             circuit.append({'name': 'X90', 'qubit': self.qubit,'modi':{(0,'freq'):fqdrv}})
             circuit.append({'name': 'read', 'qubit': self.qubit})
         circuits.append(circuit)
-
+        if self.fastreset is not None:
+            self.reads_per_shot=len(self.delay_interval)*(self.fastreset+1)
+        else:
+            self.reads_per_shot=len(self.delay_interval)
         return circuits
 
     def run_and_report(self, jobmanager, num_shots_per_circuit):
-        self.output_dict= jobmanager.collect_all(program_list=self.circuits, num_shots_per_circuit=num_shots_per_circuit, reads_per_shot=len(self.delay_interval), qchip=self.qchip)
+        self.output_dict= jobmanager.collect_all(program_list=self.circuits, num_shots_per_circuit=num_shots_per_circuit, reads_per_shot=self.reads_per_shot, qchip=self.qchip)
         self.raw_IQ=self.output_dict['s11']
         predict=jobmanager.gmm_manager.predict(self.raw_IQ)
         self.p1=numpy.mean(predict[self.qubit],axis=1).flatten()

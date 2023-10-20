@@ -17,41 +17,56 @@ class rabi:
         self.qubit = qubit
         self.qchip=qchip
         self.rabigate=rabigate
-    def rabiamp(self, amps):
+    def rabiamp(self, amps,ef=False, ef_rotate_back=False,nrepeat=1):
         self.circuits=[]
         circuit=[]
         for amp in amps:
-            circuit.extend(self.rabi_circuit(amp=amp))
+            circuit.extend(self.rabi_circuit(amp=amp,nrepeat=nrepeat,ef=ef,ef_rotate_back=ef_rotate_back))
         self.circuits.append(circuit)
         self.x=amps
         self.reads_per_shot=len(amps)
 
-    def rabitime(self, twidths):        
+    def rabitime(self, twidths,nrepeat=1,ef=False,ef_rotate_back=False):        
         self.circuits=[]
         circuit=[]
         for twidth in twidths:
-            circuit.extend(self.rabi_circuit(twidth=twidth))
+            circuit.extend(self.rabi_circuit(twidth=twidth,nrepeat=nrepeat,ef=ef,ef_rotate_back=ef_rotate_back))
         self.circuits.append(circuit)
         self.x=twidths
         self.reads_per_shot=len(twidths)
 
-    def rabi_circuit(self,amp=None,twidth=None,delaybeforecircuit=600e-6):
+    def rabi_circuit(self,amp=None,twidth=None,delaybeforecircuit=600e-6,nrepeat=1,ef=False,ef_rotate_back=False):
         """
         Make list of circuits used for drag alpha measurement. 
         """
         rabimodi={}
-        if amp is not None:
-            rabimodi.update({(0, 'amp'): amp,(1,'amp'):amp,(2,'amp'):amp})
-        if twidth is not None:
-            rising=self.qchip.gates['%s%s'%(self.qubit,self.rabigate)].contents[0].twidth
-            faling=self.qchip.gates['%s%s'%(self.qubit,self.rabigate)].contents[2].twidth
-            rabimodi.update({(2,'t0'):twidth-faling})
-            print(twidth-faling)
+        if 'rabi3' in self.rabigate:
+            if amp is not None:
+                rabimodi.update({(0, 'amp'): amp,(1,'amp'):amp,(2,'amp'):amp})
+            if twidth is not None:
+                rising=self.qchip.gates['%s%s'%(self.qubit,self.rabigate)].contents[0].twidth
+                faling=self.qchip.gates['%s%s'%(self.qubit,self.rabigate)].contents[2].twidth
+                rabimodi.update({(2,'t0'):twidth-faling})
+                print(twidth-faling)
+        elif self.rabigate in ['rabi','rabi_ef']:
+            if amp is not None:
+                rabimodi.update({(0, 'amp'): amp})
+            if twidth is not None:
+                rabimodi.update({(0,'t0'):twidth})
+        else:
+            print("help")
 
         circuit=[]
         circuit.append({'name': 'delay', 't': delaybeforecircuit, 'qubit': self.qubit})
         circuit.append({'name': 'barrier', 'qubit': self.qubit})
-        circuit.append({'name': self.rabigate, 'qubit': self.qubit ,'modi':rabimodi})
+        if ef:
+            circuit.append({'name': 'X90', 'qubit': self.qubit})
+            circuit.append({'name': 'X90', 'qubit': self.qubit})
+        for i in range(nrepeat):
+            circuit.append({'name': self.rabigate, 'qubit': self.qubit ,'modi':rabimodi})
+        if ef_rotate_back:
+            circuit.append({'name': 'X90', 'qubit': self.qubit})
+            circuit.append({'name': 'X90', 'qubit': self.qubit})
         circuit.append({'name': 'barrier', 'qubit': self.qubit})
         circuit.append({'name': 'read', 'qubit': self.qubit})
 

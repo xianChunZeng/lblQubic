@@ -41,9 +41,11 @@ class cnottruthtable:
             for tgtinit in [0,1]:
                 circuit.append({'name': 'delay', 't': self.delaybeforecircuit})
                 if ctlinit==1:
+                    circuit.append({'name': 'barrier', 'qubit': qubitid})
                     circuit.append({'name': 'X90', 'qubit': qubitid[0]})
                     circuit.append({'name': 'X90', 'qubit': qubitid[0]})
                 if tgtinit==1:
+                    circuit.append({'name': 'barrier', 'qubit': qubitid})
                     circuit.append({'name': 'X90', 'qubit': qubitid[1]})
                     circuit.append({'name': 'X90', 'qubit': qubitid[1]})
                 for i in range(repeat):
