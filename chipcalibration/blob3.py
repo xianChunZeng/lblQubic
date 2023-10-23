@@ -7,14 +7,14 @@ from chipcalibration import blob
 import itertools
 
 
-class blobs:
+class blob3:
     """
-    Define circuits, take data, and plot blobs
+    Define circuits, take data, and plot blob3
     """
 
     def __init__(self, qubit, qchip):
         """
-        Create blobs circuits according to input parameters, then compile to asm binaries.
+        Create blob3 circuits according to input parameters, then compile to asm binaries.
         """
         self.qubit = qubit
         self.qchip=qchip
@@ -25,7 +25,7 @@ class blobs:
             circuit.extend(self.base_circuit(amp=amp))
         self.circuits.append(circuit)
         self.x=amps
-        self.reads_per_shot=len(self.x)
+        self.reads_per_shot=3*len(self.x)
     def blobt0(self,t0s):
         self.circuits=[]
         circuit=[]
@@ -33,7 +33,7 @@ class blobs:
             circuit.extend(self.base_circuit(t0=t0))
         self.circuits.append(circuit)
         self.x=t0s
-        self.reads_per_shot=len(self.x)
+        self.reads_per_shot=3*len(self.x)
 
 
     def blobfreq(self,freads=None,dfreads=None):
@@ -45,7 +45,7 @@ class blobs:
         else:
             freads = freads
         self.x=freads            
-        self.reads_per_shot=len(self.x)
+        self.reads_per_shot=3*len(self.x)
         self.circuits=[]
         circuit=[]
         for fread in freads:
@@ -63,10 +63,21 @@ class blobs:
             modidict.update({(1,'t0'):t0})
         if amp is not None:            
             modidict.update({(0,'amp'):amp})
+
         circuit=[]
         circuit.append({'name': 'delay', 't': delaybeforecircuit})
+        circuit.append({'name': 'read', 'qubit': self.qubit, 'modi':modidict})
+        circuit.append({'name': 'delay', 't': delaybeforecircuit})
+        circuit.append({'name': 'X90', 'qubit': self.qubit })
         circuit.append({'name': 'X90', 'qubit': self.qubit })
         circuit.append({'name': 'read', 'qubit': self.qubit, 'modi':modidict})
+        circuit.append({'name': 'delay', 't': delaybeforecircuit})
+        circuit.append({'name': 'X90', 'qubit': self.qubit })
+        circuit.append({'name': 'X90', 'qubit': self.qubit })
+        circuit.append({'name': 'X90_ef', 'qubit': self.qubit })
+        circuit.append({'name': 'X90_ef', 'qubit': self.qubit })
+        circuit.append({'name': 'read', 'qubit': self.qubit, 'modi':modidict})
+
 
         return circuit
 
@@ -76,15 +87,24 @@ class blobs:
         self.dists=[]
         for chan,data in self.raw_IQ.items():
             for i,fread in enumerate(self.x):
-                gmm = qubic.state_disc.GMMManager(chanmap_or_chan_cfgs=jobmanager.channel_configs)
-                gmm.fit({str(chan):data[:,:,i]})
-                blobs={}
+                #                gmm = qubic.state_disc.GMMManager(chanmap_or_chan_cfgs=jobmanager.channel_configs)
+                #gmm.fit({str(chan):data[:,:,i]})
+                iq0=data[0,:,3*i+0]
+                iq1=data[0,:,3*i+1]
+                iq2=data[0,:,3*i+2]
+                gmm = qubic.state_disc.GMMStateDiscriminator(n_states=3)
+                gmm.fit(iqdata=data[:,:,i].flatten())
+                gmm.set_labels_maxtomin(iqdata=iq0,labels_maxtomin=[0,1,2])
+#                gmm.set_labels_maxtomin(iqdata=iq1,labels_maxtomin=['1'])
+#                gmm.set_none_label('2')
+
+
+                blob3={}
                 distij={}
-                gmmfit=gmm.gmm_dict[self.qubit].gmmfit
-                for i in range(gmmfit.n_components):
-                    blobs[i]=blob.c_blob(mean=gmmfit.means_[i],covar=gmmfit.covariances_[i])
-                for i,j in itertools.combinations(blobs,2): 
-                    distij[tuple(sorted([i,j]))]=blobs[i].dist(blobs[j])
+                for i in range(gmm.gmmfit.n_components):
+                    blob3[i]=blob.c_blob(mean=gmm.gmmfit.means_[i],covar=gmm.gmmfit.covariances_[i])
+                for i,j in itertools.combinations(blob3,2): 
+                    distij[tuple(sorted([gmm.labels[i],gmm.labels[j]]))]=blob3[i].dist(blob3[j])
                 self.dists.append(distij)                        
         return dict(x=self.x,dists=self.dists)
 

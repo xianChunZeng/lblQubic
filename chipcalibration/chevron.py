@@ -45,7 +45,7 @@ class Chevron:
                 cur_circ.append({'name': 'barrier'})
                 for qubit in qubits:
                     if initial_centerfreq is None:
-                        centerfreq = qchip.qubits[qubit].freq
+                        centerfreq = qchip.qubits[qubit].freq_ef if ef else qchip.qubits[qubit].freq
                     else:
                         centerfreq = initial_centerfreq
                         if len(qubits) > 0:
