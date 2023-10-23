@@ -5,7 +5,7 @@ import sys
 import chipcalibration.fit as fit
 
 
-class ramsey:
+class Ramsey:
     """
     Define circuits, take data, and plot ramsey
     """
@@ -17,6 +17,7 @@ class ramsey:
         self.qubit = qubit
         self.delay_interval=delay_interval
         self.qchip=qchip
+
     def ramsey(self, framsey_offset=None):        
         self.circuits = self._make_ramsey_circuits(framsey_offset=framsey_offset)
 
@@ -102,12 +103,13 @@ class ramsey:
 
 def absx(x,x0):
     return abs(x-x0)
+
 def ramsey_optimize(qubit,delay_interval, qchip, framsey_offsets,jobmanager,num_shots_per_circuit,plot=True):
-    iramsey=ramsey(qubit=qubit,delay_interval=delay_interval,qchip=qchip)
-    dscan=iramsey.scanoffsets(framsey_offsets=framsey_offsets,jobmanager=jobmanager,num_shots_per_circuit=num_shots_per_circuit)
-    x=[]
-    y=[]
-    for k,v in dscan['ffitoffset'].items():
+    iramsey = Ramsey(qubit=qubit,delay_interval=delay_interval,qchip=qchip)
+    dscan = iramsey.scanoffsets(framsey_offsets=framsey_offsets,jobmanager=jobmanager,num_shots_per_circuit=num_shots_per_circuit)
+    x = []
+    y = []
+    for k, v in dscan['ffitoffset'].items():
         x.append(k)
         y.append(v)
     absfit=curve_fit(absx,x,y)        

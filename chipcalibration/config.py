@@ -4,8 +4,8 @@ import os
 
 def load_configs(chipname, qchip_file='qubitcfg.json', channel_cfg_file='channel_config.json', qchip_dir='default'):
     #todo: remove hardcoded fpga config
-    fpga_config = FPGAConfig(**{'fpga_clk_period': 2.e-9, 'alu_instr_clks': 5, 'jump_cond_clks': 5, 
-                                'jump_fproc_clks': 5, 'pulse_regwrite_clks': 3})
+    fpga_config = FPGAConfig()
+
     if qchip_dir=='default':
         qchip_dir = os.path.join(os.path.dirname(__file__), '../submodules/qchip')
 
