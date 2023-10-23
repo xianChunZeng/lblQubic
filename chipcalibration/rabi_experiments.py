@@ -5,6 +5,7 @@ from chipcalibration.abstract_calibration import AbstractCalibrationExperiment
 from qubic.state_disc import GMMManager
 import warnings
 from scipy.optimize import curve_fit
+import ipdb
 
 from collections import OrderedDict
 
@@ -110,19 +111,18 @@ class TimeRabi(AbstractCalibrationExperiment):
     Time Rabi experiment based off standard Experiment class
     """
 
-    def __init__(self, target_qubit, readout_register, target_amplitude, pulse_width_interval,rabigate='rabi'):
+    def __init__(self, target_qubit, readout_register, pulse_width_interval, drive_amplitude=None, rabigate='rabi'):
         if type(target_qubit) is not list:
             target_qubit = [target_qubit]
         if len(target_qubit) > 1:
             raise ValueError("TimeRabi can only target 1 qubit at a time")
         self.target_register = target_qubit
         self.readout_register = readout_register
-        self.drive_amplitude = target_amplitude
+        self.drive_amplitude = drive_amplitude
 
         self.pulse_widths = pulse_width_interval
 
         self.rabigate=rabigate
-        self.circuits = self._make_circuits()
         self.optimization_parameters = ['X90.twidth', 'X90.amp']
         self.final_estimated_params = None
 
@@ -132,6 +132,7 @@ class TimeRabi(AbstractCalibrationExperiment):
 
         will also create a GMM Manager along the way
         """
+        self.circuits = self._make_circuits(qchip=qchip)
         self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
         self.raw_IQ = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
         fit = self._fit_data(self.shots[self.target_register[0]], fit_type, period)
@@ -161,19 +162,22 @@ class TimeRabi(AbstractCalibrationExperiment):
         """
         fit the count data to a cosine
         """
-        prior_fit_params = [-0.5, 0.5, period, 0]
+        prior_fit_params = [1, 0.5, 100.e-9, 0]
 
-        average_response = np.average(data, axis=1)
+        average_response = np.squeeze(np.average(data, axis=1))
         if fit_routine == 'fft':
             try:
                 # this is "frequency" in terms of the rabi amplitude oscillation period
                 freq_ind_max = np.argmax(np.abs(np.fft.rfft(average_response)[1:])) + 1
                 freq_max = np.fft.rfftfreq(len(average_response), np.diff(self.pulse_widths)[0])[freq_ind_max]
                 prior_fit_params[2] = 1 / freq_max
-                fit = curve_fit(self._cos, self.pulse_widths, average_response[:, 0], prior_fit_params)
+                #ipdb.set_trace()
+                fit = curve_fit(self._cos, self.pulse_widths, average_response, prior_fit_params)
                 return fit
-            except:
+            except Exception as e:
                 print('Could not fit with FFT, try again with a user defined period')
+                raise e
+                
         if fit_routine == 'period':
             if period is None:
                 fig, axs = plt.subplots()
@@ -182,7 +186,7 @@ class TimeRabi(AbstractCalibrationExperiment):
                 plt.show()
                 period = float(input("Please input the approximate period of the oscillation for fitting"))
                 prior_fit_params[2] = period
-            return curve_fit(self._cos, self.pulse_widths, average_response[:, 0], prior_fit_params)
+            return curve_fit(self._cos, self.pulse_widths, average_response, prior_fit_params)
         
     def update_qchip(self, qchip,x90gate='X90'):
         if self.final_estimated_params is None:
@@ -192,7 +196,7 @@ class TimeRabi(AbstractCalibrationExperiment):
         
         
 
-    def _make_circuits(self):
+    def _make_circuits(self, qchip):
         """
         Make list of circuits used for rabi measurement. and the list of pulse width. So there will be a total of
         1 circuits, each of which contains len(pulse_widths) measurements. A 400 us
@@ -205,8 +209,12 @@ class TimeRabi(AbstractCalibrationExperiment):
             if twidth == 0: 
                 pass
             else: 
-                cur_circ.append({'name': self.rabigate, 'qubit': self.target_register,
-                             'modi': {(0, 'twidth'): twidth, (0, 'amp'): self.drive_amplitude}})
+                if self.drive_amplitude is not None:
+                    cur_circ.append({'name': self.rabigate, 'qubit': self.target_register,
+                                    'modi': {(0, 'twidth'): twidth, (0, 'amp'): self.drive_amplitude}})
+                else:
+                    cur_circ.append({'name': self.rabigate, 'qubit': self.target_register,
+                                    'modi': {(0, 'twidth'): twidth}})
             cur_circ.append({'name': 'barrier', 'qubit': self.readout_register})
             for qid in self.readout_register:
                 cur_circ.append({'name': 'read', 'qubit': [qid]})

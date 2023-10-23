@@ -67,6 +67,7 @@ class XGateRepetition(AbstractCalibrationExperiment):
         circuits = []
         qchip_amp = qchip.gates['{}X90'.format(self.qubits[0])].contents[0].amp
         self.amplitudes = qchip_amp + np.linspace(-qchip_amp*self.delta_amp_frac, qchip_amp*self.delta_amp_frac, self.n_amps)
+        self.amplitudes = self.amplitudes[self.amplitudes < 1] #clip/delete amps
         for amp in self.amplitudes:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
