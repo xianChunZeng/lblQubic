@@ -134,7 +134,7 @@ class TimeRabi(AbstractCalibrationExperiment):
         """
         self.circuits = self._make_circuits(qchip=qchip)
         self.shots = self._collect_data(jobmanager, num_shots_per_circuit, qchip=qchip)
-        self.raw_IQ = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
+        #self.raw_IQ = jobmanager.collect_raw_IQ(self.circuits, num_shots_per_circuit, qchip=qchip)
         self.average_response = np.squeeze(np.average(self.shots[self.target_register[0]], axis=1))
         fit = self._fit_data(self.average_response, fit_type, period)
         self.fitted_rabi_period = fit[0][2]

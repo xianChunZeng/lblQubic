@@ -94,6 +94,7 @@ class tcr:
         self.c1={}
         self.r={}
         for k,v in self.output_dict['shots'].items():
+            v=v.astype(numpy.float64)
             vavr=numpy.average(v,axis=1)
             ss=vavr.reshape((len(self.circuits),self.reads_per_shot//6,6))
             self.c0[k]=ss[:,:,:3]*2-1

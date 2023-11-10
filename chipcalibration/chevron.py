@@ -73,8 +73,9 @@ class Chevron:
             circuit_runner : CircuitRunner object
             nsamples : int
         """
-        self.s11 = circuit_runner.run_circuit_batch(self.raw_asm_progs, nsamples, len(self.freqoffsets), 
+        s11_M,s11_S = circuit_runner.run_circuit_batch(self.raw_asm_progs, nsamples, reads_per_shot=len(self.freqoffsets), 
                                                     delay_per_shot=0)
+        self.s11=s11_M
         for chan in self.s11.keys():
             self.s11[chan] = np.transpose(self.s11[chan], (0, 2, 1)) # shape of s11 is pulse_widths x n_freq x nsamples
         self._fit_gmm()

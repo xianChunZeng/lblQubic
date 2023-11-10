@@ -115,16 +115,26 @@ class fullxycnot:
         return dict(pzctl=popt[0],pztgt=popt[1],pxtgt=popt[2])
         
     def update_qchip(self, qchip):
-        qchip.gates['Q1Q0CNOT'].contents[0]._phase+=self.pztgt
-        qchip.gates['Q1Q0CNOT'].contents[2]._phase-=self.pztgt
-        qchip.gates['Q1Q0CNOT'].contents[3]._phase+=self.pzctl
-        x90amp=qchip.gates['Q0X90'].contents[0].amp
-        origamp=qchip.gates['Q1Q0CNOT'].contents[4].amp
-        ampperrad=x90amp*2/numpy.pi
-        newamp=((origamp/ampperrad)+self.pxtgt)%(numpy.pi*2)*ampperrad
-        qchip.gates['Q1Q0CNOT'].contents[4].amp=newamp
-        return qchip.gates['Q1Q0CNOT'].cfg_dict
-
-
-
-
+        pztgt0=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[0].phase
+        pztgt1=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[2].phase
+        pzctl0=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[3].phase
+        txtgt0=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].twidth
+        axtgt0=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].amp
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[0]._phase+=self.pztgt
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[2]._phase-=self.pztgt
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[3]._phase+=self.pzctl
+        txtgtX90=qchip.gates[self.target_qubit+'X90'].contents[0].twidth
+        axtgtX90=qchip.gates[self.target_qubit+'X90'].contents[0].amp
+        a90=((txtgt0*axtgt0+self.pxtgt/(numpy.pi/2)*txtgtX90*axtgtX90)%(txtgtX90*axtgtX90*4))/txtgtX90
+        n90=numpy.ceil(a90)
+        #origamp=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].amp
+        #x90amp=qchip.gates[self.target_qubit+'X90'].contents[0].amp
+        #ampperrad=x90amp*2/numpy.pi
+        #newamp=((origamp/ampperrad)+self.pxtgt)%(numpy.pi*2)*ampperrad
+        #qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[0].phase=pztgt0+self.pztgt
+        #qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[2].phase=pztgt1-self.pztgt
+        #qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[3].phase=pzctl0+self.pzctl
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].env[0]['paradict']['twidth']=txtgtX90*n90
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].amp=a90/n90
+        qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[4].twidth=txtgtX90*n90
+        return qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].cfg_dict

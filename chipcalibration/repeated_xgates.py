@@ -34,6 +34,7 @@ class XGateRepetition(AbstractCalibrationExperiment):
 
         shots = jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
         self.ones_population = np.average(shots[self.qubits[0]], axis=1).flatten()
+        self.ones_population = self.ones_population.astype(np.float64)
         self._fit_data(self.ones_population)
 
     def _fit_data(self, ones_pop, fit_routine=None, prior_estimates=None):

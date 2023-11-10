@@ -79,7 +79,8 @@ class RabiAmpSweeper:
                 
     
 
-    def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True,qchip=None):
+    #def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True,qchip=None):
+    def run_and_fit(self, jobman, num_samples, prior_fit_params, use_fft=True,qchip=None):
         """
         Run Rabi amplitude pulses on all the qubits and record the Xpi/2 gate times 
 
@@ -92,7 +93,8 @@ class RabiAmpSweeper:
                     [A, B, drive_period, phi] such that
                     one_state_pop = A*cos(2*pi*x/drive_period + phi) + B
         """
-        self._take_all_data(circuit_runner, num_samples,qchip=qchip)
+        #self._take_all_data(circuit_runner, num_samples,qchip=qchip)
+        self._take_all_data(jobman, num_samples,qchip=qchip)
         self._fit_gmm()
         self._fit_count_data(prior_fit_params, use_fft)
 
