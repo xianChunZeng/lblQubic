@@ -35,7 +35,6 @@ def baseseqs(self,qubitid,xyrot,zprep,**kwargs):
         return seqs
 
 
-
 class fullxycnot:
     """
     Define circuits, take data, and plot fullxycnot fit for cnot finder, implement the 2 qubit calibration protocol as described in https://dl.acm.org/doi/full/10.1145/3529397
@@ -64,10 +63,10 @@ class fullxycnot:
                 circuit.append({'name': 'delay', 't': delaybeforecircuit})
                 circuit.extend(zxzxz(qubitid=qubitid,zprep=self.zprep))
                 circuit.append({'name': 'barrier'})
-                
+
                 circuit.append({'name': 'CNOT', 'qubit': qubitid})
                 circuit.extend([{'name': 'virtual_z', 'qubit': qubit, 'phase': rot} for qubit in qubitid])
-                
+
                 circuit.append({'name': 'barrier'})
                 if axis == 'X':
                     circuit.append({'name': 'Y-90', 'qubit': [self.control_qubit]})
@@ -75,13 +74,12 @@ class fullxycnot:
                 elif axis == 'Y':
                     circuit.append({'name': 'X90', 'qubit': [self.control_qubit]})
                     circuit.append({'name': 'X90', 'qubit': [self.target_qubit]})
-                    
+
                 circuit.append({'name': 'barrier'})
                 circuit.extend([{'name': 'read', 'qubit': qubit} for qubit in qubitid])
         circuits.append(circuit)            
-        
-        return circuits    
 
+        return circuits
 
     def run_and_report(self, jobmanager, num_shots_per_circuit, qchip):
         self.results_out = jobmanager.build_and_run_circuits(self.circuits, num_shots_per_circuit, outputs=['shots', 'counts'],qchip=qchip,reads_per_shot=len(self.xyrot))
@@ -113,7 +111,7 @@ class fullxycnot:
         self.pztgt=popt[1]
         self.pxtgt=popt[2]
         return dict(pzctl=popt[0],pztgt=popt[1],pxtgt=popt[2])
-        
+
     def update_qchip(self, qchip):
         pztgt0=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[0].phase
         pztgt1=qchip.gates[self.control_qubit+self.target_qubit+'CNOT'].contents[2].phase

@@ -147,9 +147,8 @@ class Punchout:
         # compile first circuit and load all memory 
         nfreq = len(self.freqs[self.qubits[0]])
         s11 = {qubit: np.zeros((len(self.attens), nfreq), dtype=np.complex128) for qubit in self.chanmap.keys()}    
-        s11_M,s11_S = circuit_runner.run_circuit_batch(self.raw_asm_progs, n_samples, reads_per_shot=nfreq, delay_per_shot=0,
+        s11_raw = circuit_runner.run_circuit_batch(self.raw_asm_progs, n_samples, reads_per_shot=nfreq, delay_per_shot=0,
                                          reload_cmd=True, reload_freq=False, reload_env=False)
-        s11_raw=s11_M
         for qubit, chan in self.chanmap.items():
             s11[qubit] = np.average(s11_raw[chan], axis=1)
 

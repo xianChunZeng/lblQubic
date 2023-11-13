@@ -76,8 +76,6 @@ class RabiAmpSweeper:
         set the parition of amplitudes for corresponding rabi circuits
         """
         self.amplitudes = np.linspace(lower_bound, upper_bound, num_partitions)
-                
-    
 
     #def run_and_fit(self, circuit_runner, num_samples, prior_fit_params, use_fft=True,qchip=None):
     def run_and_fit(self, jobman, num_samples, prior_fit_params, use_fft=True,qchip=None):
@@ -111,7 +109,7 @@ class RabiAmpSweeper:
         self.raw_shots = dict()
         for idx, drive_qid in enumerate(self.register): 
             print(f"Taking data for qubit {drive_qid} in batch {idx + 1} of {len(self.register)}")
-            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self.circuits[drive_qid], num_samples,qchip=self.qchip if qchip is None else qchip)['s11']
+            self.raw_shots[drive_qid] = job_manager.build_and_run_circuits(self.circuits[drive_qid], num_samples, qchip=self.qchip if qchip is None else qchip)['s11']
 
     def show_count_oscillations(self, target_qid, sub_register=None, show_fits=False):
         """
