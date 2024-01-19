@@ -10,7 +10,7 @@ class Ramsey:
     Define circuits, take data, and plot ramsey
     """
 
-    def __init__(self, qubit,delay_interval, qchip):
+    def __init__(self, qubit,delay_interval, qchip, gateX90='X90'):
         """
         Create ramsey circuits according to input parameters, then compile to asm binaries.
         """
@@ -18,6 +18,7 @@ class Ramsey:
         self.delay_interval=delay_interval
         self.qchip=qchip
         self.fastreset=None
+        self.gateX90=gateX90
     def ramsey(self, framsey_offset=None,fastreset=None):
         self.fastreset=fastreset
         self.circuits = self._make_ramsey_circuits(framsey_offset=framsey_offset)
@@ -38,13 +39,13 @@ class Ramsey:
                 for i in range(self.fastreset):
                     circuit.append({'name': 'read', 'qubit': self.qubit})
                     circuit.append({'name': 'branch_fproc', 'alu_cond': 'eq', 'cond_lhs': 1, 'func_id': '%s.meas'%self.qubit, 'scope': [self.qubit],
-                     'true': [{'name': 'X90', 'qubit':self.qubit},{'name': 'X90', 'qubit':self.qubit}],
+                     'true': [{'name': self.gateX90, 'qubit':self.qubit},{'name': self.gateX90, 'qubit':self.qubit}],
                      'false': []})
             else:
                 circuit.append({'name': 'delay', 't': delaybeforecircuit, 'qubit': self.qubit})
-            circuit.append({'name': 'X90', 'qubit': self.qubit ,'modi':{(0,'freq'):fqdrv}})
+            circuit.append({'name': self.gateX90, 'qubit': self.qubit ,'modi':{(0,'freq'):fqdrv}})
             circuit.append({'name': 'delay', 't': tdelay, 'qubit': self.qubit})
-            circuit.append({'name': 'X90', 'qubit': self.qubit,'modi':{(0,'freq'):fqdrv}})
+            circuit.append({'name': self.gateX90, 'qubit': self.qubit,'modi':{(0,'freq'):fqdrv}})
             circuit.append({'name': 'read', 'qubit': self.qubit})
         circuits.append(circuit)
         if self.fastreset is not None:
