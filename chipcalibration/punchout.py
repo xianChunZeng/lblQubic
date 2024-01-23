@@ -11,6 +11,7 @@ import numpy as np
 import sys
 import qubic.toolchain as tc
 import pdb
+from datetime import datetime
 
 FBW = 6e6 
 N_FREQ = 200
@@ -26,7 +27,7 @@ class PunchoutGUI:
     Implements clickable GUI for selecting resonator power/freq
     """
 
-    def __init__(self, freqs, attens, s11, qubitid=None,califreq=None,caliamp=None):
+    def __init__(self, freqs, attens, s11, qubitid=None,califreq=None,caliamp=None,ramp='0.25'):
         """
         Parameters
         ----------
@@ -56,7 +57,14 @@ class PunchoutGUI:
                 self.sub[i,j].axhline(y=20*np.log10(caliamp),color='black',alpha=0.3)
                 self.sub[i,j].axvline(x=califreq,color='black',alpha=0.3)
         self.fig1.canvas.mpl_connect('button_press_event', self.on_click)
-        print('Click any plot to select desired resonator attenuation and frequency. If this is not a resonator, click outside the plot to remove from config')
+        # print('Click any plot to select desired resonator attenuation and frequency. If this is not a resonator, click outside the plot to remove from config')
+       
+        '''Changes by neel to save plots'''
+        # current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # file_name = '/home/neelvora/readout/plot/'+ramp+'/sample_plot_'+current_time+'.png'
+        # plt.savefig(file_name, dpi=300)
+        # print("Saved "+ramp)
+
         plt.show()
 
     def on_click(self, event):
@@ -155,14 +163,14 @@ class Punchout:
 
         self.s11 = s11
 
-    def run_punchout_gui(self,qchip):
+    def run_punchout_gui(self,qchip,ramp='0.25'):
         self.optimal_freq = {}
         self.optimal_atten = {}
         self.cal_gui = {}
         for qubit in self.qubits:
             self.cal_gui[qubit] = PunchoutGUI(self.freqs[qubit], self.attens, self.s11[qubit], qubit
-                ,califreq=qchip.qubits[qubit].readfreq,caliamp= qchip.gates[qubit + 'read'].contents[0].amp
-                )
+                ,califreq=qchip.qubits[qubit].readfreq,caliamp= qchip.gates[qubit + 'read'].contents[0].amp,
+                ramp=ramp)
             self.optimal_freq[qubit] = self.cal_gui[qubit].freq
             self.optimal_atten[qubit] = self.cal_gui[qubit].atten
 

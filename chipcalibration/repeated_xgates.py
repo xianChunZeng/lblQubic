@@ -13,7 +13,7 @@ class XGateRepetition(AbstractCalibrationExperiment):
     Gang's X-gate repetition trick
     """
 
-    def __init__(self, qubits, delta_amp_frac, n_amps=30, n_full_rotations=1):
+    def __init__(self, qubits, delta_amp_frac, n_amps=30, n_full_rotations=1, gateX90='X90'):
         if len(qubits) > 1:
             raise ValueError("XGateRepetition can only target 1 qubit")
         self.qubits = qubits
@@ -21,7 +21,7 @@ class XGateRepetition(AbstractCalibrationExperiment):
         self.delta_amp_frac = delta_amp_frac
         self.n_amps = n_amps
         self.n_full_rotations = n_full_rotations
-
+        self.gateX90=gateX90
         self.optimization_parameters = [f'{qubits}X90.amp']
         self._results = None
 
@@ -34,6 +34,7 @@ class XGateRepetition(AbstractCalibrationExperiment):
 
         shots = jobmanager.collect_classified_shots(self.circuits, num_shots_per_circuit, qchip=qchip)
         self.ones_population = np.average(shots[self.qubits[0]], axis=1).flatten()
+        self.ones_population = self.ones_population.astype(np.float64)
         self._fit_data(self.ones_population)
 
     def _fit_data(self, ones_pop, fit_routine=None, prior_estimates=None):
@@ -65,14 +66,15 @@ class XGateRepetition(AbstractCalibrationExperiment):
         and measurement of all the readout register
         """
         circuits = []
-        qchip_amp = qchip.gates['{}X90'.format(self.qubits[0])].contents[0].amp
+        tmp1='{}'+self.gateX90
+        qchip_amp = qchip.gates[tmp1.format(self.qubits[0])].contents[0].amp
         self.amplitudes = qchip_amp + np.linspace(-qchip_amp*self.delta_amp_frac, qchip_amp*self.delta_amp_frac, self.n_amps)
         self.amplitudes = self.amplitudes[self.amplitudes < 1] #clip/delete amps
         for amp in self.amplitudes:
             cur_circ = []
             cur_circ.append({'name': 'delay', 't': 400.e-6})
             for _ in range(4*self.n_full_rotations+2):
-                cur_circ.append({'name': 'X90', 'qubit': self.qubits, 'modi': {(0, 'amp'): amp}})
+                cur_circ.append({'name': self.gateX90, 'qubit': self.qubits, 'modi': {(0, 'amp'): amp}})
 
             cur_circ.append({'name': 'read', 'qubit': self.qubits}) 
 
@@ -85,7 +87,8 @@ class XGateRepetition(AbstractCalibrationExperiment):
         return self._results
 
     def update_qchip(self, qchip):
-        qchip.gates['{}X90'.format(self.qubits[0])].contents[0].amp = self.opt_amplitude
+        tmp='{}'+self.gateX90
+        qchip.gates[tmp.format(self.qubits[0])].contents[0].amp = self.opt_amplitude
 
     def update_gmm_manager(self, gmm_manager):
         pass
